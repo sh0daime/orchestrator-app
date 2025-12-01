@@ -1,0 +1,127 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Settings - Orchestrator</title>
+    <link rel="stylesheet" href="styles.css">
+    <style>
+        .settings-container {
+            padding: 20px;
+            max-width: 600px;
+            margin: 0 auto;
+        }
+        .form-group {
+            margin-bottom: 20px;
+        }
+        label {
+            display: block;
+            margin-bottom: 5px;
+            font-weight: bold;
+        }
+        input, select {
+            width: 100%;
+            padding: 8px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            box-sizing: border-box;
+        }
+        button {
+            padding: 10px 20px;
+            background: #007bff;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            margin-right: 10px;
+        }
+        button:hover {
+            background: #0056b3;
+        }
+        button.secondary {
+            background: #6c757d;
+        }
+        .server-section, .app-section {
+            margin-bottom: 30px;
+            padding: 15px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+        }
+        .test-result {
+            margin-top: 10px;
+            padding: 10px;
+            border-radius: 4px;
+        }
+        .test-result.success {
+            background: #d4edda;
+            color: #155724;
+        }
+        .test-result.error {
+            background: #f8d7da;
+            color: #721c24;
+        }
+    </style>
+</head>
+<body>
+    <div class="settings-container">
+        <h1>Orchestrator Settings</h1>
+        
+        <div class="server-section">
+            <h2>Server Configuration</h2>
+            <div class="form-group">
+                <label for="server-name">Server Name</label>
+                <input type="text" id="server-name" placeholder="Production Server">
+            </div>
+            <div class="form-group">
+                <label for="server-host">Host / IP Address</label>
+                <input type="text" id="server-host" placeholder="192.168.1.100">
+            </div>
+            <div class="form-group">
+                <label for="server-port">SSH Port</label>
+                <input type="number" id="server-port" value="22">
+            </div>
+            <div class="form-group">
+                <label for="server-username">Username</label>
+                <input type="text" id="server-username" placeholder="calvin">
+            </div>
+            <div class="form-group">
+                <label for="ssh-key-path">SSH Key Path</label>
+                <input type="text" id="ssh-key-path" placeholder="~/.ssh/id_rsa">
+            </div>
+            <div class="form-group">
+                <label for="portal-port">Portal Port</label>
+                <input type="number" id="portal-port" value="8080">
+            </div>
+            <div class="form-group">
+                <label for="portal-path">Portal Path on Server</label>
+                <input type="text" id="portal-path" placeholder="/home/calvin/calvinsidharta/unified-gradio-portal">
+            </div>
+            <button id="test-connection">Test Connection</button>
+            <div id="test-result"></div>
+        </div>
+        
+        <div class="app-section">
+            <h2>Local App Configuration</h2>
+            <div class="form-group">
+                <label for="app-name">App Name</label>
+                <input type="text" id="app-name" placeholder="VCTT">
+            </div>
+            <div class="form-group">
+                <label for="app-path">Executable Path</label>
+                <input type="text" id="app-path" placeholder="C:/VCTT/vctt.exe">
+            </div>
+            <div class="form-group">
+                <label for="app-working-dir">Working Directory (optional)</label>
+                <input type="text" id="app-working-dir" placeholder="C:/VCTT">
+            </div>
+        </div>
+        
+        <div class="form-group">
+            <button id="save-config">Save Configuration</button>
+            <button id="load-config" class="secondary">Load Configuration</button>
+        </div>
+    </div>
+    <script type="module" src="settings.js"></script>
+</body>
+</html>
+

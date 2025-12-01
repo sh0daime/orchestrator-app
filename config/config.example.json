@@ -1,0 +1,29 @@
+{
+  "version": "1.0",
+  "servers": [
+    {
+      "id": "production",
+      "name": "Production Server",
+      "host": "192.168.1.100",
+      "port": 22,
+      "username": "calvin",
+      "ssh_key_path": "~/.ssh/id_rsa",
+      "portal_port": 8080,
+      "portal_path": "/home/calvin/calvinsidharta/unified-gradio-portal"
+    }
+  ],
+  "local_apps": [
+    {
+      "id": "vctt",
+      "name": "VCTT",
+      "executable_path": "C:/VCTT/vctt.exe",
+      "working_directory": "C:/VCTT"
+    }
+  ],
+  "preferences": {
+    "auto_start_portal": true,
+    "minimize_to_tray": true,
+    "startup_launch": false
+  }
+}
+

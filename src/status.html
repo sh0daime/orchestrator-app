@@ -1,0 +1,148 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Status - Orchestrator</title>
+    <link rel="stylesheet" href="styles.css">
+    <style>
+        .status-container {
+            padding: 20px;
+            max-width: 800px;
+            margin: 0 auto;
+        }
+        .status-card {
+            background: white;
+            border: 1px solid #ddd;
+            border-radius: 8px;
+            padding: 15px;
+            margin-bottom: 15px;
+        }
+        .status-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 15px;
+        }
+        .status-badge {
+            padding: 5px 10px;
+            border-radius: 4px;
+            font-weight: bold;
+            font-size: 12px;
+        }
+        .status-badge.connected {
+            background: #d4edda;
+            color: #155724;
+        }
+        .status-badge.disconnected {
+            background: #f8d7da;
+            color: #721c24;
+        }
+        .status-badge.ready {
+            background: #d1ecf1;
+            color: #0c5460;
+        }
+        .container-list {
+            list-style: none;
+            padding: 0;
+        }
+        .container-item {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 10px;
+            border-bottom: 1px solid #eee;
+        }
+        .container-item:last-child {
+            border-bottom: none;
+        }
+        .container-state {
+            padding: 4px 8px;
+            border-radius: 4px;
+            font-size: 12px;
+            font-weight: bold;
+        }
+        .container-state.running {
+            background: #d4edda;
+            color: #155724;
+        }
+        .container-state.stopped {
+            background: #f8d7da;
+            color: #721c24;
+        }
+        .container-state.starting {
+            background: #fff3cd;
+            color: #856404;
+        }
+        button {
+            padding: 8px 16px;
+            background: #007bff;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            margin-right: 10px;
+        }
+        button:hover {
+            background: #0056b3;
+        }
+        .portal-url {
+            background: #f8f9fa;
+            padding: 10px;
+            border-radius: 4px;
+            margin: 10px 0;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        .portal-url code {
+            flex: 1;
+            margin-right: 10px;
+        }
+    </style>
+</head>
+<body>
+    <div class="status-container">
+        <h1>Orchestrator Status</h1>
+        
+        <div class="status-card">
+            <div class="status-header">
+                <h2>Server Connection</h2>
+                <span id="connection-status" class="status-badge disconnected">Disconnected</span>
+            </div>
+            <div id="server-info"></div>
+        </div>
+        
+        <div class="status-card">
+            <div class="status-header">
+                <h2>Portal Status</h2>
+                <span id="portal-status" class="status-badge disconnected">Unknown</span>
+            </div>
+            <div id="portal-url-container" style="display: none;">
+                <div class="portal-url">
+                    <code id="portal-url-text"></code>
+                    <button id="copy-url">Copy URL</button>
+                    <button id="open-portal">Open Portal</button>
+                </div>
+            </div>
+        </div>
+        
+        <div class="status-card">
+            <div class="status-header">
+                <h2>Containers</h2>
+                <button id="refresh-status">Refresh</button>
+            </div>
+            <ul id="container-list" class="container-list">
+                <li>Loading...</li>
+            </ul>
+        </div>
+        
+        <div class="status-card">
+            <h2>Actions</h2>
+            <button id="restart-portal">Restart Portal</button>
+        </div>
+    </div>
+    <script type="module" src="status.js"></script>
+</body>
+</html>
+
