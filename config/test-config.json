@@ -1,0 +1,22 @@
+{
+  "version": "1.0",
+  "servers": [
+    {
+      "id": "test-server",
+      "name": "Test Server (192.168.50.101)",
+      "host": "192.168.50.101",
+      "port": 22,
+      "username": "calvin",
+      "ssh_key_path": "C:\\Users\\plab\\calvin@desktop",
+      "portal_port": 8080,
+      "portal_path": "/home/calvin/calvinsidharta/unified-gradio-portal"
+    }
+  ],
+  "local_apps": [],
+  "preferences": {
+    "auto_start_portal": true,
+    "minimize_to_tray": true,
+    "startup_launch": false
+  }
+}
+

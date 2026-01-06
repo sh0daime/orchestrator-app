@@ -8,9 +8,65 @@
     <style>
         .settings-container {
             padding: 20px;
-            max-width: 600px;
+            max-width: 900px;
             margin: 0 auto;
         }
+        
+        /* Tabs styling */
+        .tabs {
+            display: flex;
+            border-bottom: 2px solid #ddd;
+            margin-bottom: 20px;
+            gap: 5px;
+        }
+        .tab {
+            padding: 10px 20px;
+            background: #f5f5f5;
+            border: 1px solid #ddd;
+            border-bottom: none;
+            border-radius: 4px 4px 0 0;
+            cursor: pointer;
+            position: relative;
+        }
+        .tab.active {
+            background: white;
+            border-bottom: 2px solid white;
+            margin-bottom: -2px;
+        }
+        .tab:hover {
+            background: #e9e9e9;
+        }
+        .tab.active:hover {
+            background: white;
+        }
+        .tab-close {
+            margin-left: 10px;
+            color: #999;
+            font-weight: bold;
+            cursor: pointer;
+        }
+        .tab-close:hover {
+            color: #d00;
+        }
+        .add-tab-btn {
+            padding: 10px 20px;
+            background: #28a745;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            margin-left: auto;
+        }
+        
+        /* Tab content */
+        .tab-content {
+            display: none;
+        }
+        .tab-content.active {
+            display: block;
+        }
+        
+        /* Form styling */
         .form-group {
             margin-bottom: 20px;
         }
@@ -19,12 +75,16 @@
             margin-bottom: 5px;
             font-weight: bold;
         }
-        input, select {
+        input[type="text"], input[type="number"] {
             width: 100%;
             padding: 8px;
             border: 1px solid #ddd;
             border-radius: 4px;
             box-sizing: border-box;
+        }
+        input[type="checkbox"] {
+            width: auto;
+            margin-right: 8px;
         }
         button {
             padding: 10px 20px;
@@ -40,13 +100,79 @@
         }
         button.secondary {
             background: #6c757d;
+            color: white;
         }
-        .server-section, .app-section {
+        button.secondary:hover {
+            background: #5a6268;
+        }
+        button.danger {
+            background: #dc3545;
+            color: white;
+        }
+        button.danger:hover {
+            background: #c82333;
+            color: white;
+        }
+        button.success {
+            background: #28a745;
+            color: white;
+        }
+        button.success:hover {
+            background: #218838;
+            color: white;
+        }
+        
+        /* Sections */
+        .server-info-section, .services-section, .local-apps-section {
             margin-bottom: 30px;
             padding: 15px;
             border: 1px solid #ddd;
             border-radius: 4px;
+            background: #f9f9f9;
         }
+        
+        /* Accordion styling */
+        .accordion {
+            margin-top: 15px;
+        }
+        .accordion-item {
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            margin-bottom: 10px;
+            background: white;
+        }
+        .accordion-header {
+            padding: 12px;
+            background: #f5f5f5;
+            cursor: pointer;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            border-radius: 4px;
+        }
+        .accordion-header:hover {
+            background: #e9e9e9;
+        }
+        .accordion-header.active {
+            background: #007bff;
+            color: white;
+        }
+        .accordion-toggle {
+            font-weight: bold;
+            margin-right: 10px;
+        }
+        .accordion-content {
+            display: none;
+            padding: 15px;
+        }
+        .accordion-content.active {
+            display: block;
+        }
+        .accordion-actions {
+            display: flex;
+            gap: 5px;
+        }
+        
         .test-result {
             margin-top: 10px;
             padding: 10px;
@@ -60,68 +186,43 @@
             background: #f8d7da;
             color: #721c24;
         }
+        
+        small {
+            color: #666;
+            display: block;
+            margin-top: 5px;
+        }
     </style>
 </head>
 <body>
     <div class="settings-container">
         <h1>Orchestrator Settings</h1>
         
-        <div class="server-section">
-            <h2>Server Configuration</h2>
-            <div class="form-group">
-                <label for="server-name">Server Name</label>
-                <input type="text" id="server-name" placeholder="Production Server">
-            </div>
-            <div class="form-group">
-                <label for="server-host">Host / IP Address</label>
-                <input type="text" id="server-host" placeholder="192.168.1.100">
-            </div>
-            <div class="form-group">
-                <label for="server-port">SSH Port</label>
-                <input type="number" id="server-port" value="22">
-            </div>
-            <div class="form-group">
-                <label for="server-username">Username</label>
-                <input type="text" id="server-username" placeholder="calvin">
-            </div>
-            <div class="form-group">
-                <label for="ssh-key-path">SSH Key Path</label>
-                <input type="text" id="ssh-key-path" placeholder="~/.ssh/id_rsa">
-            </div>
-            <div class="form-group">
-                <label for="portal-port">Portal Port</label>
-                <input type="number" id="portal-port" value="8080">
-            </div>
-            <div class="form-group">
-                <label for="portal-path">Portal Path on Server</label>
-                <input type="text" id="portal-path" placeholder="/home/calvin/calvinsidharta/unified-gradio-portal">
-            </div>
-            <button id="test-connection">Test Connection</button>
-            <div id="test-result"></div>
+        <!-- Server Tabs -->
+        <div class="tabs" id="server-tabs">
+            <!-- Tabs will be dynamically generated -->
         </div>
         
-        <div class="app-section">
-            <h2>Local App Configuration</h2>
-            <div class="form-group">
-                <label for="app-name">App Name</label>
-                <input type="text" id="app-name" placeholder="VCTT">
-            </div>
-            <div class="form-group">
-                <label for="app-path">Executable Path</label>
-                <input type="text" id="app-path" placeholder="C:/VCTT/vctt.exe">
-            </div>
-            <div class="form-group">
-                <label for="app-working-dir">Working Directory (optional)</label>
-                <input type="text" id="app-working-dir" placeholder="C:/VCTT">
-            </div>
+        <!-- Tab Contents -->
+        <div id="server-tab-contents">
+            <!-- Tab contents will be dynamically generated -->
         </div>
         
+        <!-- Local Apps Section (outside tabs) -->
+        <div class="local-apps-section">
+            <h2>Local Applications</h2>
+            <div id="local-apps-container">
+                <!-- Local apps will be dynamically generated -->
+            </div>
+            <button class="success" id="add-local-app">+ Add Local App</button>
+        </div>
+        
+        <!-- Action Buttons -->
         <div class="form-group">
             <button id="save-config">Save Configuration</button>
-            <button id="load-config" class="secondary">Load Configuration</button>
+            <button id="load-config" class="secondary" style="color: white;">Reload Configuration</button>
         </div>
     </div>
     <script type="module" src="settings.js"></script>
 </body>
 </html>
-

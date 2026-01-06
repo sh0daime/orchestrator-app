@@ -8,9 +8,44 @@
     <style>
         .status-container {
             padding: 20px;
-            max-width: 800px;
+            max-width: 1000px;
             margin: 0 auto;
         }
+        
+        /* Server tabs */
+        .tabs {
+            display: flex;
+            border-bottom: 2px solid #ddd;
+            margin-bottom: 20px;
+            gap: 5px;
+        }
+        .tab {
+            padding: 10px 20px;
+            background: #f5f5f5;
+            border: 1px solid #ddd;
+            border-bottom: none;
+            border-radius: 4px 4px 0 0;
+            cursor: pointer;
+        }
+        .tab.active {
+            background: white;
+            border-bottom: 2px solid white;
+            margin-bottom: -2px;
+        }
+        .tab:hover {
+            background: #e9e9e9;
+        }
+        .tab.active:hover {
+            background: white;
+        }
+        
+        .tab-content {
+            display: none;
+        }
+        .tab-content.active {
+            display: block;
+        }
+        
         .status-card {
             background: white;
             border: 1px solid #ddd;
@@ -42,24 +77,125 @@
             background: #d1ecf1;
             color: #0c5460;
         }
-        .container-list {
-            list-style: none;
-            padding: 0;
+        .status-badge.running {
+            background: #d4edda;
+            color: #155724;
         }
-        .container-item {
+        .status-badge.not-ready {
+            background: #fff3cd;
+            color: #856404;
+        }
+        
+        /* Service cards */
+        .service-card {
+            background: #f9f9f9;
+            border: 1px solid #ddd;
+            border-radius: 6px;
+            padding: 12px;
+            margin-bottom: 10px;
+        }
+        .service-header {
             display: flex;
             justify-content: space-between;
             align-items: center;
-            padding: 10px;
-            border-bottom: 1px solid #eee;
+            margin-bottom: 10px;
         }
-        .container-item:last-child {
-            border-bottom: none;
+        .service-name {
+            font-weight: bold;
+            font-size: 16px;
+        }
+        .service-url {
+            background: #f8f9fa;
+            padding: 8px;
+            border-radius: 4px;
+            margin: 8px 0;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            font-family: monospace;
+            font-size: 13px;
+        }
+        .service-actions {
+            display: flex;
+            gap: 5px;
+            margin-top: 10px;
+        }
+        
+        button {
+            padding: 8px 16px;
+            background: #007bff;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 13px;
+        }
+        button:hover {
+            background: #0056b3;
+        }
+        button.success {
+            background: #28a745;
+            color: white;
+        }
+        button.success:hover {
+            background: #218838;
+            color: white;
+        }
+        button.danger {
+            background: #dc3545;
+            color: white;
+        }
+        button.danger:hover {
+            background: #c82333;
+            color: white;
+        }
+        button.secondary {
+            background: #6c757d;
+            color: white;
+        }
+        button.secondary:hover {
+            background: #5a6268;
+            color: white;
+        }
+        button:disabled {
+            background: #ccc;
+            cursor: not-allowed;
+        }
+        
+        .refresh-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 20px;
+        }
+        
+        .no-services {
+            color: #666;
+            font-style: italic;
+            padding: 20px;
+            text-align: center;
+        }
+        
+        .container-list {
+            list-style: none;
+            padding: 0;
+            margin: 10px 0;
+        }
+        .container-item {
+            padding: 8px;
+            background: white;
+            border: 1px solid #e0e0e0;
+            border-radius: 4px;
+            margin-bottom: 5px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            font-size: 13px;
         }
         .container-state {
-            padding: 4px 8px;
-            border-radius: 4px;
-            font-size: 12px;
+            padding: 3px 8px;
+            border-radius: 3px;
+            font-size: 11px;
             font-weight: bold;
         }
         .container-state.running {
@@ -70,79 +206,80 @@
             background: #f8d7da;
             color: #721c24;
         }
-        .container-state.starting {
-            background: #fff3cd;
-            color: #856404;
+        
+        /* Logs modal styles */
+        .logs-modal-backdrop {
+            position: fixed;
+            inset: 0;
+            background: rgba(0, 0, 0, 0.6);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            z-index: 9999;
+            backdrop-filter: blur(2px);
         }
-        button {
-            padding: 8px 16px;
-            background: #007bff;
-            color: white;
-            border: none;
-            border-radius: 4px;
-            cursor: pointer;
-            margin-right: 10px;
+        .logs-modal-content {
+            background: white;
+            width: 90%;
+            max-width: 1100px;
+            max-height: 85vh;
+            border-radius: 8px;
+            overflow: hidden;
+            display: flex;
+            flex-direction: column;
+            box-shadow: 0 10px 40px rgba(0, 0, 0, 0.3);
         }
-        button:hover {
-            background: #0056b3;
-        }
-        .portal-url {
-            background: #f8f9fa;
-            padding: 10px;
-            border-radius: 4px;
-            margin: 10px 0;
+        .logs-modal-header {
+            padding: 12px 16px;
             display: flex;
             justify-content: space-between;
             align-items: center;
+            border-bottom: 1px solid #ddd;
+            background: #f8f9fa;
         }
-        .portal-url code {
+        .logs-modal-title {
+            font-size: 14px;
+            font-weight: bold;
+        }
+        .logs-modal-controls {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        .logs-content-wrapper {
             flex: 1;
-            margin-right: 10px;
+            overflow: auto;
+            background: #1e1e1e;
+        }
+        .logs-content {
+            padding: 12px;
+            font-family: 'Consolas', 'Monaco', 'Courier New', monospace;
+            font-size: 12px;
+            line-height: 1.5;
+            color: #d4d4d4;
+            white-space: pre-wrap;
+            word-break: break-all;
+            overflow-x: auto;
         }
     </style>
 </head>
 <body>
     <div class="status-container">
-        <h1>Orchestrator Status</h1>
-        
-        <div class="status-card">
-            <div class="status-header">
-                <h2>Server Connection</h2>
-                <span id="connection-status" class="status-badge disconnected">Disconnected</span>
-            </div>
-            <div id="server-info"></div>
+        <div class="refresh-header">
+            <h1>Orchestrator Status</h1>
+            <button id="refresh-all" class="success">🔄 Refresh All</button>
         </div>
         
-        <div class="status-card">
-            <div class="status-header">
-                <h2>Portal Status</h2>
-                <span id="portal-status" class="status-badge disconnected">Unknown</span>
-            </div>
-            <div id="portal-url-container" style="display: none;">
-                <div class="portal-url">
-                    <code id="portal-url-text"></code>
-                    <button id="copy-url">Copy URL</button>
-                    <button id="open-portal">Open Portal</button>
-                </div>
-            </div>
+        <!-- Server Tabs -->
+        <div class="tabs" id="server-tabs">
+            <!-- Tabs will be dynamically generated -->
         </div>
         
-        <div class="status-card">
-            <div class="status-header">
-                <h2>Containers</h2>
-                <button id="refresh-status">Refresh</button>
-            </div>
-            <ul id="container-list" class="container-list">
-                <li>Loading...</li>
-            </ul>
-        </div>
-        
-        <div class="status-card">
-            <h2>Actions</h2>
-            <button id="restart-portal">Restart Portal</button>
+        <!-- Tab Contents -->
+        <div id="server-tab-contents">
+            <!-- Tab contents will be dynamically generated -->
         </div>
     </div>
     <script type="module" src="status.js"></script>
 </body>
 </html>
-
