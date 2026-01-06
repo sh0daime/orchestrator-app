@@ -452,12 +452,20 @@ class API:
     def get_vctt_status(self) -> Dict[str, Any]:
         """Get VCTT installation and configuration status"""
         try:
+            print("Getting VCTT status...")
             interface = VCTTInterface()
-            return interface.get_status()
+            status = interface.get_status()
+            print(f"VCTT status: {status}")
+            return status
         except Exception as e:
+            print(f"Error getting VCTT status: {e}")
+            import traceback
+            traceback.print_exc()
             return {
                 "installed": False,
                 "configured": False,
+                "valid_path": False,
+                "found_installations": [],
                 "error": str(e)
             }
     
@@ -492,7 +500,7 @@ class API:
         Automatically configure VCTT in local_apps after installation.
         
         Args:
-            vctt_path: Path to VCTT_app directory
+            vctt_path: Path to VCTT installation directory (can be parent or VCTT_app)
             conda_env: Conda environment name (default: vtcc_test)
             
         Returns:
@@ -503,22 +511,45 @@ class API:
             from pathlib import Path
             
             config = AppConfig.load()
-            vctt_dir = Path(vctt_path)
+            base_path = Path(vctt_path)
             
-            # Find main.py
-            main_py = vctt_dir / "main.py"
+            # Determine the actual VCTT_app directory
+            # Check if vctt_path is VCTT_app itself
+            if (base_path / "main.py").exists():
+                vctt_app_dir = base_path
+            # Check if vctt_path/VCTT_app exists
+            elif (base_path / "VCTT_app" / "main.py").exists():
+                vctt_app_dir = base_path / "VCTT_app"
+            else:
+                # Try to find VCTT installations
+                found = VCTTInterface.find_vctt_installations()
+                if found:
+                    vctt_app_dir = found[0]
+                    print(f"Found VCTT installation at: {vctt_app_dir}")
+                else:
+                    raise Exception(f"VCTT installation not found at {vctt_path}. Please ensure VCTT is installed.")
+            
+            # Validate it's a real VCTT installation
+            main_py = vctt_app_dir / "main.py"
             if not main_py.exists():
-                raise Exception(f"main.py not found in {vctt_path}")
+                raise Exception(f"main.py not found in {vctt_app_dir}. This doesn't appear to be a valid VCTT installation.")
+            
+            # Check for launch script
+            launch_bat = vctt_app_dir / "launch_vctt.bat"
+            launch_sh = vctt_app_dir / "launch_vctt.sh"
+            if not launch_bat.exists() and not launch_sh.exists():
+                raise Exception(f"Launch script not found in {vctt_app_dir}. This doesn't appear to be a valid VCTT installation.")
             
             # Check if VCTT is already configured
             for app in config.local_apps:
                 if 'VCTT' in app.name or 'vctt' in app.name.lower():
-                    # Update existing config
+                    # Update existing config with validated path
                     app.executable_path = str(main_py)
-                    app.working_directory = str(vctt_dir)
+                    app.working_directory = str(vctt_app_dir)
                     app.use_shell = True
                     app.conda_env = conda_env
                     config.save()
+                    print(f"Updated VCTT configuration: {app.id}")
                     return app.id
             
             # Create new VCTT app config
@@ -527,7 +558,7 @@ class API:
                 id=app_id,
                 name="VCTT App",
                 executable_path=str(main_py),
-                working_directory=str(vctt_dir),
+                working_directory=str(vctt_app_dir),
                 use_shell=True,
                 conda_env=conda_env,
                 shell_command=None,
@@ -538,7 +569,7 @@ class API:
             config.local_apps.append(vctt_app)
             config.save()
             
-            print(f"VCTT configured as local app: {app_id}")
+            print(f"VCTT configured as local app: {app_id} at {vctt_app_dir}")
             return app_id
             
         except Exception as e:

@@ -108,6 +108,8 @@ interface PyWebViewAPI {
     app_id?: string;
     version?: string;
     path?: string;
+    valid_path?: boolean;
+    found_installations?: string[];
     bootstrap_exists?: boolean;
     error?: string;
   }>;

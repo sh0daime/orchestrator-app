@@ -1,8 +1,9 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Sparkles, Workflow, Monitor, Settings, Activity } from 'lucide-react';
 import logo from "../../icons/icon.png";
 import ServiceSelector from '../components/ServiceSelector';
 import VCTTInstaller from '../components/VCTTInstaller';
+import SetupWizard from '../components/SetupWizard';
 
 // Helper function to wait for PyWebView API to be ready
 function waitForAPI(): Promise<void> {
@@ -25,11 +26,64 @@ interface ServiceInstance {
 }
 
 export default function App() {
+  const [showWizard, setShowWizard] = useState(false);
+  const [isCheckingFirstRun, setIsCheckingFirstRun] = useState(true);
   const [serviceSelector, setServiceSelector] = useState<{
     serviceName: string;
     instances: ServiceInstance[];
   } | null>(null);
   const [showVCTTInstaller, setShowVCTTInstaller] = useState(false);
+
+  // Check if this is a first-run on mount
+  useEffect(() => {
+    checkFirstRun();
+  }, []);
+
+  async function checkFirstRun() {
+    try {
+      await waitForAPI();
+      const api = window.pywebview!.api;
+      const config = await api.load_config();
+      
+      // Check if setup is incomplete
+      // Show wizard if:
+      // 1. setup_completed is false/undefined AND
+      // 2. No servers configured
+      const setupCompleted = config.preferences?.setup_completed ?? false;
+      const hasServers = config.servers && config.servers.length > 0;
+      const isFirstRun = !setupCompleted && !hasServers;
+      
+      console.log('First-run check:', {
+        setup_completed: setupCompleted,
+        servers_count: config.servers?.length || 0,
+        hasServers,
+        isFirstRun,
+        config: config
+      });
+      
+      if (isFirstRun) {
+        console.log('Showing setup wizard - first run detected');
+        setShowWizard(true);
+      } else {
+        console.log('Skipping setup wizard - already configured');
+      }
+    } catch (error) {
+      console.error('Failed to check first-run status:', error);
+      // On error, don't show wizard (safer)
+    } finally {
+      setIsCheckingFirstRun(false);
+    }
+  }
+
+  const handleWizardComplete = () => {
+    setShowWizard(false);
+    // Optionally refresh the page or show success message
+    window.location.reload();
+  };
+
+  const handleWizardSkip = () => {
+    setShowWizard(false);
+  };
 
   // Find services by name across all servers
   const findServicesByName = (config: any, serviceNames: string[]): ServiceInstance[] => {
@@ -182,34 +236,60 @@ export default function App() {
         }
         
         case 'vctt': {
-          // Check VCTT status
-          const vcttStatus = await api.get_vctt_status();
-          
-          if (vcttStatus.configured && vcttStatus.app_id) {
-            // VCTT is configured, launch it
-            try {
-              await api.launch_local_app(vcttStatus.app_id);
-              alert('VCTT App launched successfully!');
-            } catch (error: any) {
-              alert(`Failed to launch VCTT: ${error.message}`);
+          try {
+            // Check VCTT status
+            console.log('Checking VCTT status...');
+            const vcttStatus = await api.get_vctt_status();
+            console.log('VCTT status:', vcttStatus);
+            
+            if (vcttStatus.error) {
+              console.error('VCTT status error:', vcttStatus.error);
+              alert(`Error checking VCTT status: ${vcttStatus.error}`);
+              break;
             }
-          } else if (vcttStatus.installed) {
-            // VCTT is installed but not configured
-            // Try to auto-configure it
-            try {
-              if (vcttStatus.path) {
+            
+            if (vcttStatus.configured && vcttStatus.app_id) {
+              // VCTT is configured, launch it
+              console.log('VCTT is configured, launching...');
+              try {
+                await api.launch_local_app(vcttStatus.app_id);
+                alert('VCTT App launched successfully!');
+              } catch (error: any) {
+                console.error('Failed to launch VCTT:', error);
+                alert(`Failed to launch VCTT: ${error.message}`);
+              }
+            } else if (vcttStatus.installed && vcttStatus.valid_path && vcttStatus.path) {
+              // VCTT is installed and path is valid, but not configured
+              console.log('VCTT is installed but not configured, auto-configuring...');
+              try {
                 const appId = await api.configure_vctt_app(vcttStatus.path);
+                console.log('VCTT configured, launching...');
                 await api.launch_local_app(appId);
                 alert('VCTT App configured and launched successfully!');
-              } else {
-                alert('VCTT is installed but path is unknown. Please configure it manually in Settings.');
+              } catch (error: any) {
+                console.error('Auto-configuration failed:', error);
+                alert(`VCTT is installed but configuration failed: ${error.message}. Please configure it manually in Settings.`);
               }
-            } catch (error: any) {
-              alert(`VCTT is installed but configuration failed: ${error.message}. Please configure it manually in Settings.`);
+            } else if (vcttStatus.found_installations && vcttStatus.found_installations.length > 0) {
+              // Found VCTT installations but not configured
+              console.log('Found VCTT installations, configuring...');
+              try {
+                const appId = await api.configure_vctt_app(vcttStatus.found_installations[0]);
+                console.log('VCTT configured, launching...');
+                await api.launch_local_app(appId);
+                alert('VCTT App configured and launched successfully!');
+              } catch (error: any) {
+                console.error('Configuration failed:', error);
+                alert(`Found VCTT installation but configuration failed: ${error.message}. Please configure it manually in Settings.`);
+              }
+            } else {
+              // VCTT is not installed, show installer
+              console.log('VCTT not found, showing installer...');
+              setShowVCTTInstaller(true);
             }
-          } else {
-            // VCTT is not installed, show installer
-            setShowVCTTInstaller(true);
+          } catch (error: any) {
+            console.error('Error in VCTT handler:', error);
+            alert(`Error: ${error.message}`);
           }
           break;
         }
@@ -234,8 +314,28 @@ export default function App() {
     }
   };
 
+  // Don't render dashboard while checking first-run status
+  if (isCheckingFirstRun) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-gray-50 via-gray-100 to-gray-200 flex items-center justify-center">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-500 mx-auto mb-4"></div>
+          <p className="text-gray-600">Loading...</p>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="min-h-screen bg-gradient-to-br from-gray-50 via-gray-100 to-gray-200 flex flex-col relative overflow-hidden">
+      {/* Setup Wizard Modal */}
+      {showWizard && (
+        <SetupWizard
+          onComplete={handleWizardComplete}
+          onSkip={handleWizardSkip}
+        />
+      )}
+
       {/* Service Selector Modal */}
       {serviceSelector && (
         <ServiceSelector
