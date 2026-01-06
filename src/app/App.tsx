@@ -194,8 +194,8 @@ export default function App() {
           const instances = findServicesByName(config, serviceNames);
           
           if (instances.length === 0) {
-            // No instances found
-            alert('No AI Gradio Apps service configured. Please configure a server and service in Settings.');
+            // No instances found, show setup wizard
+            setShowWizard(true);
           } else if (instances.length === 1) {
             // Single instance, launch directly
             const instance = instances[0];
@@ -218,8 +218,8 @@ export default function App() {
           const instances = findServicesByName(config, serviceNames);
           
           if (instances.length === 0) {
-            // No instances found
-            alert('No Pipeline Management Tool service configured. Please configure a server and service in Settings.');
+            // No instances found, show setup wizard
+            setShowWizard(true);
           } else if (instances.length === 1) {
             // Single instance, launch directly
             const instance = instances[0];
