@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { X, Download, FolderOpen, CheckCircle, AlertCircle, Loader } from 'lucide-react';
 
 interface VCTTInstallerProps {
@@ -9,9 +9,11 @@ interface VCTTInstallerProps {
 export default function VCTTInstaller({ onComplete, onCancel }: VCTTInstallerProps) {
   const [installPath, setInstallPath] = useState('');
   const [isInstalling, setIsInstalling] = useState(false);
-  const [installStatus, setInstallStatus] = useState<'idle' | 'installing' | 'success' | 'error'>('idle');
+  const [installStatus, setInstallStatus] = useState<'idle' | 'installing' | 'awaiting_continue' | 'success' | 'error'>('idle');
   const [statusMessage, setStatusMessage] = useState('');
   const [mode, setMode] = useState<'install' | 'browse'>('install'); // 'install' or 'browse'
+  const [bootstrapRunning, setBootstrapRunning] = useState(false);
+  const pollingIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   // Helper function to wait for PyWebView API
   const waitForAPI = (): Promise<void> => {
@@ -29,10 +31,50 @@ export default function VCTTInstaller({ onComplete, onCancel }: VCTTInstallerPro
     return '~/VCTT';
   };
 
+  const startPollingBootstrapStatus = async (installDir: string) => {
+    // Poll every 2 seconds to check if terminal window is still open
+    pollingIntervalRef.current = setInterval(async () => {
+      try {
+        await waitForAPI();
+        const api = window.pywebview!.api;
+        const isRunning = await api.is_vctt_bootstrap_running(installDir);
+        
+        if (!isRunning) {
+          // Terminal window closed - user finished (or cancelled)
+          setBootstrapRunning(false);
+          setStatusMessage('Terminal window closed. Click "Continue" to verify and configure the installation.');
+          setInstallStatus('awaiting_continue'); // Waiting for user to click Continue
+          if (pollingIntervalRef.current) {
+            clearInterval(pollingIntervalRef.current);
+            pollingIntervalRef.current = null;
+          }
+        }
+      } catch (error: any) {
+        console.error('Error checking bootstrap status:', error);
+        // Continue polling even if there's an error
+      }
+    }, 2000); // Check every 2 seconds
+  };
+
+  // Cleanup polling on unmount
+  useEffect(() => {
+    return () => {
+      if (pollingIntervalRef.current) {
+        clearInterval(pollingIntervalRef.current);
+      }
+    };
+  }, []);
+
   const handleInstall = async () => {
     if (!installPath.trim()) {
       setStatusMessage('Please enter an installation directory');
       setInstallStatus('error');
+      return;
+    }
+
+    // Prevent multiple installations
+    if (bootstrapRunning) {
+      setStatusMessage('Installation already in progress. Please wait for it to complete.');
       return;
     }
 
@@ -48,35 +90,42 @@ export default function VCTTInstaller({ onComplete, onCancel }: VCTTInstallerPro
       const result = await api.run_vctt_bootstrap(installPath);
 
       if (result.success) {
-        setStatusMessage('Installation window opened! Please complete the installation process in the installer window, then click "Continue" below.');
-        setInstallStatus('success');
-        setIsInstalling(false); // Allow user to click Continue
+        setStatusMessage('Installation window opened! Please complete the installation in the terminal window. When finished, close the terminal and click "Continue" below.');
+        setInstallStatus('installing');
+        setBootstrapRunning(true);
+        setIsInstalling(false); // Allow UI to update
         
-        // Don't auto-configure yet - wait for user to confirm installation is complete
+        // Start polling to check if terminal window is closed
+        startPollingBootstrapStatus(installPath);
       } else {
         setStatusMessage(`Installation failed: ${result.message}`);
         setInstallStatus('error');
         setIsInstalling(false);
+        setBootstrapRunning(false);
       }
     } catch (error: any) {
       setStatusMessage(`Failed to start installation: ${error.message}`);
       setInstallStatus('error');
       setIsInstalling(false);
+      setBootstrapRunning(false);
     }
   };
 
   const handleContinue = async () => {
-    // User has confirmed installation is complete, now configure
+    // User has confirmed installation is complete, now verify and configure
     setIsInstalling(true);
     setInstallStatus('installing');
-    setStatusMessage('Configuring VCTT...');
+    setStatusMessage('Verifying installation...');
 
     try {
       await waitForAPI();
       const api = window.pywebview!.api;
 
-      // Configure VCTT in orchestrator
+      // First, verify that VCTT was actually installed at the specified path
+      // The configure_vctt_app will validate the path
+      setStatusMessage('Configuring VCTT...');
       await api.configure_vctt_app(installPath);
+      
       setStatusMessage(`Installation complete! VCTT has been configured.`);
       setInstallStatus('success');
       
@@ -84,8 +133,10 @@ export default function VCTTInstaller({ onComplete, onCancel }: VCTTInstallerPro
         onComplete(installPath);
       }, 2000);
     } catch (error: any) {
-      setStatusMessage(`Configuration failed: ${error.message}. You can configure it manually in Settings.`);
+      // If configuration fails, it means installation didn't complete successfully
+      setStatusMessage(`Configuration failed: ${error.message}. Please ensure the installation completed successfully in the terminal window.`);
       setInstallStatus('error');
+      setBootstrapRunning(false); // Allow user to try again
     } finally {
       setIsInstalling(false);
     }
@@ -206,16 +257,26 @@ export default function VCTTInstaller({ onComplete, onCancel }: VCTTInstallerPro
                 <label className="block text-sm font-medium text-gray-700 mb-2">
                   Installation Directory <span className="text-red-500">*</span>
                 </label>
-                <input
-                  type="text"
-                  value={installPath}
-                  onChange={(e) => setInstallPath(e.target.value)}
-                  placeholder={getDefaultPath()}
-                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                  disabled={isInstalling}
-                />
+                <div className="flex gap-2">
+                  <input
+                    type="text"
+                    value={installPath}
+                    onChange={(e) => setInstallPath(e.target.value)}
+                    placeholder={getDefaultPath()}
+                    className="flex-1 px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    disabled={isInstalling || bootstrapRunning}
+                  />
+                  <button
+                    onClick={handleBrowseFolder}
+                    className="px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                    disabled={isInstalling || bootstrapRunning}
+                    title="Browse for directory"
+                  >
+                    <FolderOpen className="w-5 h-5 text-gray-600" />
+                  </button>
+                </div>
                 <p className="text-xs text-gray-500 mt-1">
-                  Enter the directory where VCTT should be installed (e.g., ~/VCTT or C:\Users\YourName\VCTT)
+                  Enter or browse to select where VCTT should be installed (e.g., C:\Users\YourName\VCTT). The directory can be empty or non-existent.
                 </p>
               </div>
 
@@ -295,7 +356,7 @@ export default function VCTTInstaller({ onComplete, onCancel }: VCTTInstallerPro
         <div className="p-6 border-t border-gray-200 bg-gray-50 flex justify-end gap-3">
           <button
             onClick={onCancel}
-            disabled={isInstalling}
+            disabled={isInstalling || bootstrapRunning}
             className="px-4 py-2 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-100 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
           >
             Cancel
@@ -308,10 +369,11 @@ export default function VCTTInstaller({ onComplete, onCancel }: VCTTInstallerPro
               <CheckCircle className="w-4 h-4" />
               Configure VCTT
             </button>
-          ) : installStatus === 'success' && !isInstalling && mode === 'install' ? (
+          ) : mode === 'install' && installStatus === 'awaiting_continue' ? (
             <button
               onClick={handleContinue}
-              className="px-6 py-2 bg-green-500 text-white rounded-lg hover:bg-green-600 transition-colors flex items-center gap-2"
+              disabled={!installPath.trim() || isInstalling}
+              className="px-6 py-2 bg-green-500 text-white rounded-lg hover:bg-green-600 disabled:bg-gray-300 disabled:cursor-not-allowed transition-colors flex items-center gap-2"
             >
               <CheckCircle className="w-4 h-4" />
               Continue
@@ -319,13 +381,13 @@ export default function VCTTInstaller({ onComplete, onCancel }: VCTTInstallerPro
           ) : mode === 'install' ? (
             <button
               onClick={handleInstall}
-              disabled={isInstalling || !installPath.trim()}
+              disabled={isInstalling || bootstrapRunning || !installPath.trim()}
               className="px-6 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 disabled:bg-gray-300 disabled:cursor-not-allowed transition-colors flex items-center gap-2"
             >
-              {isInstalling ? (
+              {isInstalling || bootstrapRunning ? (
                 <>
                   <Loader className="w-4 h-4 animate-spin" />
-                  {installStatus === 'installing' && statusMessage.includes('Configuring') ? 'Configuring...' : 'Installing...'}
+                  {bootstrapRunning ? 'Installing...' : 'Starting...'}
                 </>
               ) : (
                 <>

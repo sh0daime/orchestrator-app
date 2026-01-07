@@ -118,6 +118,7 @@ interface PyWebViewAPI {
     exit_code: number;
     message: string;
   }>;
+  is_vctt_bootstrap_running: (installDir: string) => Promise<boolean>;
   configure_vctt_app: (vcttPath: string, condaEnv?: string) => Promise<string>;
   
   // File dialogs

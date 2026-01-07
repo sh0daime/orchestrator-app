@@ -67,29 +67,26 @@ class ProcessManager:
                 # Execute via shell
                 if sys.platform == 'win32':
                     # Windows: use cmd.exe
+                    # Don't pipe stdout/stderr to allow subprocesses and interactive tools to work properly
                     process = subprocess.Popen(
                         shell_cmd,
                         shell=True,
                         cwd=config.working_directory,
-                        stdout=subprocess.PIPE,
-                        stderr=subprocess.PIPE,
                         creationflags=subprocess.CREATE_NEW_CONSOLE if sys.platform == 'win32' else 0
                     )
                 else:
                     # Mac/Linux: use sh
+                    # Don't pipe stdout/stderr to allow subprocesses and interactive tools to work properly
                     process = subprocess.Popen(
                         ['sh', '-c', shell_cmd],
-                        cwd=config.working_directory,
-                        stdout=subprocess.PIPE,
-                        stderr=subprocess.PIPE
+                        cwd=config.working_directory
                     )
             else:
                 # Direct execution
+                # Don't pipe stdout/stderr to allow subprocesses and interactive tools to work properly
                 process = subprocess.Popen(
                     [config.executable_path],
-                    cwd=config.working_directory,
-                    stdout=subprocess.PIPE,
-                    stderr=subprocess.PIPE
+                    cwd=config.working_directory
                 )
             
             self.processes[config.id] = process

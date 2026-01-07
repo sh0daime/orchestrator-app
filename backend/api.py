@@ -626,6 +626,18 @@ class API:
                 "message": f"Failed to run bootstrap: {e}"
             }
     
+    def is_vctt_bootstrap_running(self, install_dir: str) -> bool:
+        """
+        Check if VCTT bootstrap installation is still running.
+        
+        Args:
+            install_dir: Installation directory used to identify the process
+            
+        Returns:
+            True if bootstrap is still running, False otherwise
+        """
+        return VCTTInterface.is_bootstrap_running(install_dir)
+    
     def configure_vctt_app(self, vctt_path: str, conda_env: str = "vtcc_test") -> str:
         """
         Automatically configure VCTT in local_apps after installation.

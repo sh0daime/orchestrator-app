@@ -154,16 +154,23 @@ goto :auth_done
 
 echo.
 
-REM Ask for installation directory
-set "DEFAULT_DIR=%USERPROFILE%\VCTT"
-set /p INSTALL_DIR="Installation directory [%DEFAULT_DIR%]: "
-if "!INSTALL_DIR!"=="" set "INSTALL_DIR=%DEFAULT_DIR%"
+REM Check if installation directory was provided as command-line argument
+if "%~1"=="" (
+    REM No argument provided, prompt user
+    set "DEFAULT_DIR=%USERPROFILE%\VCTT"
+    set /p INSTALL_DIR="Installation directory [%DEFAULT_DIR%]: "
+    if "!INSTALL_DIR!"=="" set "INSTALL_DIR=%DEFAULT_DIR%"
+) else (
+    REM Use provided directory
+    set "INSTALL_DIR=%~1"
+    echo [INFO] Using installation directory from command line: !INSTALL_DIR!
+)
 
 echo.
 echo [INFO] Will install to: !INSTALL_DIR!
 echo.
 
-REM Check if directory already exists
+REM Check if VCTT_app already exists at this location
 if exist "!INSTALL_DIR!\VCTT_app" (
     echo [WARNING] VCTT appears to be already installed at this location.
     set /p REINSTALL="Reinstall? This will delete the existing installation (y/N): "
@@ -176,9 +183,20 @@ if exist "!INSTALL_DIR!\VCTT_app" (
     rmdir /s /q "!INSTALL_DIR!"
 )
 
-REM Create parent directory
+REM Create parent directory if it doesn't exist
 if not exist "!INSTALL_DIR!" (
     mkdir "!INSTALL_DIR!"
+) else (
+    REM Directory exists - check if it's empty or just contains safe files
+    dir /b "!INSTALL_DIR!" 2>nul | findstr /r "^" >nul
+    if not errorlevel 1 (
+        REM Directory is not empty - check if it only contains VCTT files
+        if not exist "!INSTALL_DIR!\VCTT_app" (
+            echo [WARNING] Directory !INSTALL_DIR! already exists and is not empty.
+            echo [INFO] Contents will be preserved, VCTT will be cloned into this directory.
+            pause
+        )
+    )
 )
 
 REM Clone repository

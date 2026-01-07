@@ -131,16 +131,23 @@ esac
 
 echo
 
-# Ask for installation directory
-DEFAULT_DIR="$HOME/VCTT"
-read -p "Installation directory [$DEFAULT_DIR]: " INSTALL_DIR
-INSTALL_DIR="${INSTALL_DIR:-$DEFAULT_DIR}"
+# Check if installation directory was provided as command-line argument
+if [ -z "$1" ]; then
+    # No argument provided, prompt user
+    DEFAULT_DIR="$HOME/VCTT"
+    read -p "Installation directory [$DEFAULT_DIR]: " INSTALL_DIR
+    INSTALL_DIR="${INSTALL_DIR:-$DEFAULT_DIR}"
+else
+    # Use provided directory
+    INSTALL_DIR="$1"
+    echo "[INFO] Using installation directory from command line: $INSTALL_DIR"
+fi
 
 echo
 echo "[INFO] Will install to: $INSTALL_DIR"
 echo
 
-# Check if directory already exists
+# Check if VCTT_app already exists at this location
 if [ -d "$INSTALL_DIR/VCTT_app" ]; then
     echo "[WARNING] VCTT appears to be already installed at this location."
     read -p "Reinstall? This will delete the existing installation (y/N): " REINSTALL
@@ -152,8 +159,17 @@ if [ -d "$INSTALL_DIR/VCTT_app" ]; then
     rm -rf "$INSTALL_DIR"
 fi
 
-# Create parent directory
+# Create parent directory if it doesn't exist
 mkdir -p "$INSTALL_DIR"
+
+# Check if directory is not empty (excluding hidden files)
+if [ -d "$INSTALL_DIR" ] && [ "$(ls -A "$INSTALL_DIR" 2>/dev/null)" ]; then
+    if [ ! -d "$INSTALL_DIR/VCTT_app" ]; then
+        echo "[WARNING] Directory $INSTALL_DIR already exists and is not empty."
+        echo "[INFO] Contents will be preserved, VCTT will be cloned into this directory."
+        read -p "Press Enter to continue..."
+    fi
+fi
 
 # Clone repository
 echo

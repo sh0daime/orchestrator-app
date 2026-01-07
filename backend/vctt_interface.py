@@ -27,6 +27,9 @@ from typing import Optional, Tuple, Dict, Any, List
 class VCTTInterface:
     """Interface for orchestrator to manage VCTT application."""
     
+    # Class variable to track running bootstrap processes
+    _bootstrap_processes: Dict[str, subprocess.Popen] = {}
+    
     def __init__(self, vctt_path: Optional[str] = None):
         """
         Initialize the VCTT interface.
@@ -201,40 +204,127 @@ class VCTTInterface:
                     output = result.stdout if hasattr(result, 'stdout') and result.stdout else ""
                     return result.returncode, output
                 else:
-                    # For wait=False, use 'start' command to open in new window
-                    # This ensures the terminal window is visible and interactive
-                    # Use absolute paths and proper quoting
+                    # For wait=False, use cmd.exe /k to keep terminal window open and visible
+                    # This gives us a process handle we can track (cmd.exe stays alive while terminal is open)
                     bootstrap_abs = str(self.bootstrap_script.resolve())
+                    install_dir_abs = str(install_path.resolve())
                     work_dir_abs = str(install_path.parent.resolve())
-                    # start "title" /D "working_dir" cmd /c "command"
-                    cmd = f'start "VCTT Bootstrap Installer" /D "{work_dir_abs}" cmd /c "{bootstrap_abs}"'
-                    print(f"[VCTT] Spawning terminal with command: {cmd}")
-                    subprocess.Popen(
+                    # Use cmd.exe /k to run batch script and keep window open
+                    # /k keeps the command prompt open after the batch file completes
+                    # Pass arguments separately - subprocess handles quoting automatically
+                    cmd = ['cmd.exe', '/k', bootstrap_abs, install_dir_abs]
+                    print(f"[VCTT] Spawning terminal with command: cmd.exe /k {bootstrap_abs} {install_dir_abs}")
+                    process = subprocess.Popen(
                         cmd,
-                        shell=True
+                        cwd=work_dir_abs,
+                        creationflags=subprocess.CREATE_NEW_CONSOLE
                     )
+                    # Store process handle for tracking (use absolute path as key)
+                    # The process handle is for cmd.exe which stays alive while terminal is open
+                    VCTTInterface._bootstrap_processes[install_dir_abs] = process
+                    print(f"[VCTT] Bootstrap process started with PID: {process.pid}")
                     return 0, "Bootstrap installer started in new terminal window"
             else:
                 # Mac/Linux: run shell script
-                cmd = ['bash', str(self.bootstrap_script), install_dir]
+                bootstrap_abs = str(self.bootstrap_script.resolve())
+                work_dir_abs = str(install_path.parent.resolve())
+                
                 if wait:
                     result = subprocess.run(
-                        cmd,
-                        cwd=str(install_path.parent),
+                        ['bash', bootstrap_abs, install_dir],
+                        cwd=work_dir_abs,
                         text=True
                     )
                     output = result.stdout if result.stdout else ""
                     return result.returncode, output
                 else:
-                    # Don't wait - spawn in new terminal
-                    subprocess.Popen(
-                        cmd,
-                        cwd=str(install_path.parent)
-                    )
-                    return 0, "Bootstrap installer started in new terminal window"
+                    # Spawn in new terminal window
+                    import platform
+                    system = platform.system()
+                    
+                    if system == 'Darwin':  # macOS
+                        # Use osascript to open Terminal.app with the script
+                        script_content = f'''
+tell application "Terminal"
+    activate
+    do script "cd \\"{work_dir_abs}\\" && bash \\"{bootstrap_abs}\\" {install_dir}"
+end tell
+'''
+                        subprocess.Popen(
+                            ['osascript', '-e', script_content],
+                            stdout=subprocess.DEVNULL,
+                            stderr=subprocess.DEVNULL
+                        )
+                        return 0, "Bootstrap installer started in new Terminal window"
+                    else:  # Linux
+                        # Try common terminal emulators
+                        terminals = [
+                            ['gnome-terminal', '--', 'bash', '-c', f'cd "{work_dir_abs}" && bash "{bootstrap_abs}" {install_dir}; exec bash'],
+                            ['xterm', '-e', 'bash', '-c', f'cd "{work_dir_abs}" && bash "{bootstrap_abs}" {install_dir}; exec bash'],
+                            ['konsole', '-e', 'bash', '-c', f'cd "{work_dir_abs}" && bash "{bootstrap_abs}" {install_dir}; exec bash'],
+                            ['x-terminal-emulator', '-e', 'bash', '-c', f'cd "{work_dir_abs}" && bash "{bootstrap_abs}" {install_dir}; exec bash'],
+                        ]
+                        
+                        for term_cmd in terminals:
+                            try:
+                                process = subprocess.Popen(
+                                    term_cmd,
+                                    stdout=subprocess.DEVNULL,
+                                    stderr=subprocess.DEVNULL
+                                )
+                                # Store process handle for tracking
+                                VCTTInterface._bootstrap_processes[install_dir] = process
+                                return 0, f"Bootstrap installer started in new terminal window ({term_cmd[0]})"
+                            except FileNotFoundError:
+                                continue
+                        
+                        # Fallback: just run in background if no terminal found
+                        process = subprocess.Popen(
+                            ['bash', bootstrap_abs, install_dir],
+                            cwd=work_dir_abs
+                        )
+                        VCTTInterface._bootstrap_processes[install_dir] = process
+                        return 0, "Bootstrap installer started (no terminal emulator found, running in background)"
                 
         except Exception as e:
             return 1, f"Failed to run bootstrap: {e}"
+    
+    @staticmethod
+    def is_bootstrap_running(install_dir: str) -> bool:
+        """
+        Check if a bootstrap installation is still running.
+        
+        Args:
+            install_dir: Installation directory used to identify the process
+            
+        Returns:
+            True if bootstrap is still running, False otherwise
+        """
+        # Check Windows processes (use absolute path as key)
+        import platform
+        if platform.system() == 'Windows':
+            install_path = Path(install_dir).resolve()
+            install_dir_abs = str(install_path)
+            if install_dir_abs in VCTTInterface._bootstrap_processes:
+                process = VCTTInterface._bootstrap_processes[install_dir_abs]
+                if process.poll() is None:
+                    return True
+                else:
+                    # Process finished, remove from tracking
+                    del VCTTInterface._bootstrap_processes[install_dir_abs]
+                    return False
+        
+        # Check Mac/Linux processes
+        if install_dir in VCTTInterface._bootstrap_processes:
+            process = VCTTInterface._bootstrap_processes[install_dir]
+            if process.poll() is None:
+                return True
+            else:
+                # Process finished, remove from tracking
+                del VCTTInterface._bootstrap_processes[install_dir]
+                return False
+        
+        return False
     
     def is_valid_vctt_path(self) -> bool:
         """
