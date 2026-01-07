@@ -91,24 +91,68 @@ class SSHClient:
     
     def check_containers_at_path(self, path: str) -> List[ContainerStatus]:
         """Check Docker containers status at a specific path"""
-        cmd = f"cd {path} && docker compose ps --format json"
-        output = self.execute_command(cmd)
+        # First check if path exists
+        try:
+            check_dir_cmd = f"test -d {path} && echo 'dir_exists' || echo 'dir_not_found'"
+            dir_check = self.execute_command(check_dir_cmd).strip()
+            if dir_check != 'dir_exists':
+                print(f"Error: Path does not exist: {path}")
+                print(f"Please verify the path is correct in Settings.")
+                return []
+            
+            # Check if docker-compose.yml exists
+            check_compose_cmd = f"test -f {path}/docker-compose.yml && echo 'compose_yml' || (test -f {path}/docker-compose.yaml && echo 'compose_yaml' || echo 'no_compose')"
+            compose_check = self.execute_command(check_compose_cmd).strip()
+            if compose_check == 'no_compose':
+                print(f"Warning: No docker-compose.yml or docker-compose.yaml found at {path}")
+                print(f"Path exists but docker-compose file is missing. Listing directory contents:")
+                try:
+                    ls_cmd = f"ls -la {path} | head -20"
+                    ls_output = self.execute_command(ls_cmd)
+                    print(ls_output)
+                except:
+                    pass
+                # Return empty list - service will show as not configured
+                return []
+        except Exception as e:
+            print(f"Warning: Could not verify path {path}: {e}")
+            # Continue anyway - docker compose will fail with a clearer error
         
-        containers = []
-        for line in output.strip().split('\n'):
-            if not line:
-                continue
-            try:
-                container = json.loads(line)
-                containers.append(ContainerStatus(
-                    name=container.get('Name', ''),
-                    status=container.get('Status', ''),
-                    state=container.get('State', '')
-                ))
-            except json.JSONDecodeError:
-                continue
-        
-        return containers
+        # Try to get containers
+        try:
+            cmd = f"cd {path} && docker compose ps --format json 2>&1"
+            output = self.execute_command(cmd)
+            
+            containers = []
+            for line in output.strip().split('\n'):
+                if not line or line.strip() == '':
+                    continue
+                try:
+                    container = json.loads(line)
+                    containers.append(ContainerStatus(
+                        name=container.get('Name', ''),
+                        status=container.get('Status', ''),
+                        state=container.get('State', '')
+                    ))
+                except json.JSONDecodeError:
+                    # Skip non-JSON lines (like error messages)
+                    continue
+            
+            return containers
+        except Exception as e:
+            error_msg = str(e)
+            # Check if it's a "no configuration file" error
+            if 'no configuration file' in error_msg.lower() or 'not found' in error_msg.lower():
+                print(f"Error: No docker-compose.yml found at {path}")
+                print(f"This usually means:")
+                print(f"  1. The path '{path}' is incorrect")
+                print(f"  2. The docker-compose.yml file doesn't exist at that location")
+                print(f"  3. The file might be named differently (docker-compose.yaml)")
+                print(f"Please check the path in Settings and ensure docker-compose.yml exists.")
+                # Return empty list instead of failing - allows graceful handling
+                return []
+            # For other errors, re-raise
+            raise
     
     def start_portal(self) -> None:
         """Start the portal Docker containers (deprecated, use start_service)"""

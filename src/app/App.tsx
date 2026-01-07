@@ -33,6 +33,7 @@ export default function App() {
     instances: ServiceInstance[];
   } | null>(null);
   const [showVCTTInstaller, setShowVCTTInstaller] = useState(false);
+  const [launchingVCTT, setLaunchingVCTT] = useState(false); // Prevent double launch
 
   // Check if this is a first-run on mount
   useEffect(() => {
@@ -236,60 +237,65 @@ export default function App() {
         }
         
         case 'vctt': {
+          // Prevent double launch - check if already launching
+          if (launchingVCTT) {
+            console.log('[VCTT] Launch already in progress, ignoring duplicate request');
+            break;
+          }
+          
           try {
+            setLaunchingVCTT(true);
             // Check VCTT status
-            console.log('Checking VCTT status...');
+            console.log('[VCTT] Checking VCTT status...');
             const vcttStatus = await api.get_vctt_status();
-            console.log('VCTT status:', vcttStatus);
+            console.log('[VCTT] Status result:', vcttStatus);
             
             if (vcttStatus.error) {
-              console.error('VCTT status error:', vcttStatus.error);
+              console.error('[VCTT] Status error:', vcttStatus.error);
               alert(`Error checking VCTT status: ${vcttStatus.error}`);
               break;
             }
             
-            if (vcttStatus.configured && vcttStatus.app_id) {
-              // VCTT is configured, launch it
-              console.log('VCTT is configured, launching...');
+            if (vcttStatus.configured && vcttStatus.valid_path && vcttStatus.app_id) {
+              // VCTT is configured and path is valid, launch it
+              console.log('[VCTT] Configured and valid, checking if already running...');
               try {
+                // Check if already running via API before launching
+                const isRunning = await api.is_app_running(vcttStatus.app_id);
+                if (isRunning) {
+                  console.log('[VCTT] Already running, skipping launch');
+                  alert('VCTT App is already running.');
+                  break;
+                }
+                
+                console.log('[VCTT] Not running, launching...');
                 await api.launch_local_app(vcttStatus.app_id);
-                alert('VCTT App launched successfully!');
+                console.log('[VCTT] Launch command sent successfully');
+                // Don't show alert - launch happens in background
               } catch (error: any) {
-                console.error('Failed to launch VCTT:', error);
-                alert(`Failed to launch VCTT: ${error.message}`);
+                console.error('[VCTT] Launch error:', error);
+                // Check if error is "already running"
+                if (error.message && error.message.includes('already running')) {
+                  alert('VCTT App is already running.');
+                } else {
+                  alert(`Failed to launch VCTT: ${error.message}`);
+                }
               }
-            } else if (vcttStatus.installed && vcttStatus.valid_path && vcttStatus.path) {
-              // VCTT is installed and path is valid, but not configured
-              console.log('VCTT is installed but not configured, auto-configuring...');
-              try {
-                const appId = await api.configure_vctt_app(vcttStatus.path);
-                console.log('VCTT configured, launching...');
-                await api.launch_local_app(appId);
-                alert('VCTT App configured and launched successfully!');
-              } catch (error: any) {
-                console.error('Auto-configuration failed:', error);
-                alert(`VCTT is installed but configuration failed: ${error.message}. Please configure it manually in Settings.`);
-              }
-            } else if (vcttStatus.found_installations && vcttStatus.found_installations.length > 0) {
-              // Found VCTT installations but not configured
-              console.log('Found VCTT installations, configuring...');
-              try {
-                const appId = await api.configure_vctt_app(vcttStatus.found_installations[0]);
-                console.log('VCTT configured, launching...');
-                await api.launch_local_app(appId);
-                alert('VCTT App configured and launched successfully!');
-              } catch (error: any) {
-                console.error('Configuration failed:', error);
-                alert(`Found VCTT installation but configuration failed: ${error.message}. Please configure it manually in Settings.`);
-              }
+            } else if (vcttStatus.configured && !vcttStatus.valid_path) {
+              // VCTT is configured but path is invalid
+              console.log('[VCTT] Configured but path invalid, showing installer to reconfigure...');
+              alert(`VCTT is configured but the installation path is invalid: ${vcttStatus.path || 'unknown'}\n\nPlease reconfigure VCTT.`);
+              setShowVCTTInstaller(true);
             } else {
-              // VCTT is not installed, show installer
-              console.log('VCTT not found, showing installer...');
+              // VCTT is not configured, show installer
+              console.log('[VCTT] Not configured, showing installer...');
               setShowVCTTInstaller(true);
             }
           } catch (error: any) {
-            console.error('Error in VCTT handler:', error);
+            console.error('[VCTT] Handler error:', error);
             alert(`Error: ${error.message}`);
+          } finally {
+            setLaunchingVCTT(false);
           }
           break;
         }

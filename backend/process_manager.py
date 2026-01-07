@@ -18,9 +18,11 @@ class ProcessManager:
         if config.id in self.processes:
             process = self.processes[config.id]
             if process.poll() is None:  # Still running
+                print(f"App '{config.name}' is already running (PID: {process.pid})")
                 raise Exception(f"App '{config.name}' is already running")
             else:
                 # Process has exited, remove it
+                print(f"Previous process for '{config.name}' has exited, cleaning up...")
                 del self.processes[config.id]
         
         try:

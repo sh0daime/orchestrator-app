@@ -51,6 +51,73 @@ async function loadConfig() {
     }
 }
 
+// Validate server configuration
+function validateServers() {
+    const errors = [];
+    const serverNames = new Set();
+    const serverHosts = new Set();
+    
+    if (!config.servers || config.servers.length === 0) {
+        return { valid: true, errors: [] };
+    }
+    
+    config.servers.forEach((server, index) => {
+        const serverNum = index + 1;
+        const name = (server.name || '').trim();
+        const host = (server.host || '').trim();
+        const port = server.port || 22;
+        const username = (server.username || '').trim();
+        const sshKey = (server.ssh_key_path || '').trim();
+        
+        // Check required fields
+        if (!name) {
+            errors.push(`Server ${serverNum}: Name is required`);
+        }
+        if (!host) {
+            errors.push(`Server ${serverNum}: Host/IP address is required`);
+        }
+        if (!username) {
+            errors.push(`Server ${serverNum}: Username is required`);
+        }
+        if (!sshKey) {
+            errors.push(`Server ${serverNum}: SSH key path is required`);
+        }
+        
+        // Check for duplicate names
+        if (name && serverNames.has(name)) {
+            errors.push(`Duplicate server name: "${name}". Server names must be unique.`);
+        } else if (name) {
+            serverNames.add(name);
+        }
+        
+        // Check for duplicate host:port combinations
+        if (host) {
+            // Validate host format (basic)
+            const hostPattern = /^([a-zA-Z0-9]([a-zA-Z0-9\-\.]*[a-zA-Z0-9])?|\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}|\[?[0-9a-fA-F:]+]?)$/;
+            if (!hostPattern.test(host)) {
+                errors.push(`Server ${serverNum} ("${name || 'Unnamed'}"): Invalid host/IP address format: "${host}"`);
+            }
+            
+            // Validate port range
+            if (port < 1 || port > 65535) {
+                errors.push(`Server ${serverNum} ("${name || 'Unnamed'}"): Invalid port ${port}. Port must be between 1 and 65535.`);
+            }
+            
+            const hostKey = `${host}:${port}`;
+            if (serverHosts.has(hostKey)) {
+                errors.push(`Duplicate server IP/Port: "${hostKey}". Each server must have a unique host:port combination.`);
+            } else if (host) {
+                serverHosts.add(hostKey);
+            }
+        }
+    });
+    
+    return {
+        valid: errors.length === 0,
+        errors: errors
+    };
+}
+
 // Save configuration
 async function saveConfig() {
     try {
@@ -60,13 +127,22 @@ async function saveConfig() {
         collectServerData();
         collectLocalAppData();
         
+        // Validate before saving
+        const validation = validateServers();
+        if (!validation.valid) {
+            const errorMsg = "Configuration validation failed:\n\n" + validation.errors.join('\n');
+            alert(errorMsg);
+            return;
+        }
+        
         console.log("Saving config:", config);
         await window.pywebview.api.save_config(config);
         alert("Configuration saved successfully!");
         
     } catch (error) {
         console.error("Failed to save config:", error);
-        alert("Failed to save configuration: " + error);
+        const errorMsg = error.message || String(error);
+        alert("Failed to save configuration: " + errorMsg);
     }
 }
 
@@ -158,23 +234,26 @@ function renderServerContent(server, serverIndex) {
         <div class="server-info-section">
             <h2>Server Information</h2>
             <div class="form-group">
-                <label for="${prefix}-name">Server Name</label>
-                <input type="text" id="${prefix}-name" value="${server.name || ''}" placeholder="Production Server">
+                <label for="${prefix}-name">Server Name <span class="required">*</span></label>
+                <input type="text" id="${prefix}-name" value="${server.name || ''}" placeholder="Production Server" class="server-name-input" data-server-index="${serverIndex}">
+                <div class="validation-error" id="${prefix}-name-error" style="display: none;"></div>
             </div>
             <div class="form-group">
-                <label for="${prefix}-host">Host / IP Address</label>
-                <input type="text" id="${prefix}-host" value="${server.host || ''}" placeholder="192.168.1.100">
+                <label for="${prefix}-host">Host / IP Address <span class="required">*</span></label>
+                <input type="text" id="${prefix}-host" value="${server.host || ''}" placeholder="192.168.1.100" class="server-host-input" data-server-index="${serverIndex}">
+                <div class="validation-error" id="${prefix}-host-error" style="display: none;"></div>
             </div>
             <div class="form-group">
-                <label for="${prefix}-port">SSH Port</label>
-                <input type="number" id="${prefix}-port" value="${server.port || 22}">
+                <label for="${prefix}-port">SSH Port <span class="required">*</span></label>
+                <input type="number" id="${prefix}-port" value="${server.port || 22}" min="1" max="65535" class="server-port-input" data-server-index="${serverIndex}">
+                <div class="validation-error" id="${prefix}-port-error" style="display: none;"></div>
             </div>
             <div class="form-group">
-                <label for="${prefix}-username">Username</label>
+                <label for="${prefix}-username">Username <span class="required">*</span></label>
                 <input type="text" id="${prefix}-username" value="${server.username || ''}" placeholder="calvin">
             </div>
             <div class="form-group">
-                <label for="${prefix}-ssh-key">SSH Key Path</label>
+                <label for="${prefix}-ssh-key">SSH Key Path <span class="required">*</span></label>
                 <input type="text" id="${prefix}-ssh-key" value="${server.ssh_key_path || ''}" placeholder="~/.ssh/id_rsa">
             </div>
             <button class="test-connection-btn" data-server-index="${serverIndex}">Test Connection</button>
@@ -328,9 +407,18 @@ function switchTab(index) {
 
 // Add server
 function addServer() {
+    // Generate unique default name
+    let defaultName = "New Server";
+    let counter = 1;
+    const existingNames = new Set(config.servers.map(s => s.name));
+    while (existingNames.has(defaultName)) {
+        defaultName = `New Server ${counter}`;
+        counter++;
+    }
+    
     config.servers.push({
         id: generateId(),
-        name: "New Server",
+        name: defaultName,
         host: "",
         port: 22,
         username: "",
@@ -432,6 +520,118 @@ async function testConnection(serverIndex) {
     }
 }
 
+// Validate individual server field
+function validateServerField(serverIndex, fieldType) {
+    collectServerData(); // Update config with current values
+    
+    const prefix = `server-${serverIndex}`;
+    const nameInput = document.getElementById(`${prefix}-name`);
+    const hostInput = document.getElementById(`${prefix}-host`);
+    const portInput = document.getElementById(`${prefix}-port`);
+    
+    // Clear previous errors
+    document.querySelectorAll(`[id^="${prefix}-"][id$="-error"]`).forEach(el => {
+        el.style.display = 'none';
+        el.textContent = '';
+    });
+    document.querySelectorAll(`[id^="${prefix}-"]`).forEach(input => {
+        input.classList.remove('error');
+    });
+    
+    let hasErrors = false;
+    
+    // Validate server name
+    if (fieldType === 'name' || fieldType === 'all') {
+        const name = (nameInput?.value || '').trim();
+        const nameError = document.getElementById(`${prefix}-name-error`);
+        
+        if (!name) {
+            nameError.textContent = 'Server name is required';
+            nameError.style.display = 'block';
+            nameInput?.classList.add('error');
+            hasErrors = true;
+        } else {
+            // Check for duplicate names
+            const duplicateIndex = config.servers.findIndex((s, idx) => 
+                idx !== serverIndex && s.name && s.name.trim().toLowerCase() === name.toLowerCase()
+            );
+            if (duplicateIndex !== -1) {
+                nameError.textContent = `Duplicate server name. Another server already uses "${name}"`;
+                nameError.style.display = 'block';
+                nameInput?.classList.add('error');
+                hasErrors = true;
+            }
+        }
+    }
+    
+    // Validate host/IP
+    if (fieldType === 'host' || fieldType === 'all') {
+        const host = (hostInput?.value || '').trim();
+        const port = parseInt(portInput?.value) || 22;
+        const hostError = document.getElementById(`${prefix}-host-error`);
+        
+        if (!host) {
+            hostError.textContent = 'Host/IP address is required';
+            hostError.style.display = 'block';
+            hostInput?.classList.add('error');
+            hasErrors = true;
+        } else {
+            // Basic host format validation
+            const hostPattern = /^([a-zA-Z0-9]([a-zA-Z0-9\-\.]*[a-zA-Z0-9])?|\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}|\[?[0-9a-fA-F:]+]?)$/;
+            if (!hostPattern.test(host)) {
+                hostError.textContent = 'Invalid host/IP address format';
+                hostError.style.display = 'block';
+                hostInput?.classList.add('error');
+                hasErrors = true;
+            } else {
+                // Check for duplicate host:port
+                const hostKey = `${host}:${port}`;
+                const duplicateIndex = config.servers.findIndex((s, idx) => 
+                    idx !== serverIndex && s.host && s.port && 
+                    `${s.host.trim()}:${s.port}` === hostKey
+                );
+                if (duplicateIndex !== -1) {
+                    hostError.textContent = `Duplicate server IP/Port. Another server already uses "${hostKey}"`;
+                    hostError.style.display = 'block';
+                    hostInput?.classList.add('error');
+                    hasErrors = true;
+                }
+            }
+        }
+    }
+    
+    // Validate port
+    if (fieldType === 'port' || fieldType === 'all') {
+        const port = parseInt(portInput?.value) || 22;
+        const portError = document.getElementById(`${prefix}-port-error`);
+        
+        if (port < 1 || port > 65535) {
+            portError.textContent = 'Port must be between 1 and 65535';
+            portError.style.display = 'block';
+            portInput?.classList.add('error');
+            hasErrors = true;
+        } else {
+            // Re-check host:port duplicate if host is set
+            const host = (hostInput?.value || '').trim();
+            if (host) {
+                const hostKey = `${host}:${port}`;
+                const duplicateIndex = config.servers.findIndex((s, idx) => 
+                    idx !== serverIndex && s.host && s.port && 
+                    `${s.host.trim()}:${s.port}` === hostKey
+                );
+                if (duplicateIndex !== -1) {
+                    portError.textContent = `Duplicate server IP/Port. Another server already uses "${hostKey}"`;
+                    portError.style.display = 'block';
+                    portInput?.classList.add('error');
+                    hasErrors = true;
+                }
+            }
+        }
+    }
+    
+    return !hasErrors;
+}
+
 // Attach server event listeners
 function attachServerEventListeners() {
     // Tab close buttons
@@ -458,6 +658,53 @@ function attachServerEventListeners() {
             e.stopPropagation();
             removeService(parseInt(btn.dataset.server), parseInt(btn.dataset.service));
         };
+    });
+    
+    // Real-time validation for server name
+    document.querySelectorAll('.server-name-input').forEach(input => {
+        const serverIndex = parseInt(input.dataset.serverIndex);
+        input.addEventListener('blur', () => validateServerField(serverIndex, 'name'));
+        input.addEventListener('input', () => {
+            // Clear error on input
+            const errorDiv = document.getElementById(`server-${serverIndex}-name-error`);
+            if (errorDiv) {
+                errorDiv.style.display = 'none';
+                input.classList.remove('error');
+            }
+        });
+    });
+    
+    // Real-time validation for server host
+    document.querySelectorAll('.server-host-input').forEach(input => {
+        const serverIndex = parseInt(input.dataset.serverIndex);
+        input.addEventListener('blur', () => validateServerField(serverIndex, 'host'));
+        input.addEventListener('input', () => {
+            // Clear error on input
+            const errorDiv = document.getElementById(`server-${serverIndex}-host-error`);
+            if (errorDiv) {
+                errorDiv.style.display = 'none';
+                input.classList.remove('error');
+            }
+        });
+    });
+    
+    // Real-time validation for server port
+    document.querySelectorAll('.server-port-input').forEach(input => {
+        const serverIndex = parseInt(input.dataset.serverIndex);
+        input.addEventListener('blur', () => validateServerField(serverIndex, 'port'));
+        input.addEventListener('input', () => {
+            // Clear error on input and re-validate host:port combo
+            const errorDiv = document.getElementById(`server-${serverIndex}-port-error`);
+            if (errorDiv) {
+                errorDiv.style.display = 'none';
+                input.classList.remove('error');
+            }
+            // Also re-validate host if it's set (for host:port duplicate check)
+            const hostInput = document.getElementById(`server-${serverIndex}-host`);
+            if (hostInput && hostInput.value.trim()) {
+                validateServerField(serverIndex, 'host');
+            }
+        });
     });
     
     // Accordion toggles

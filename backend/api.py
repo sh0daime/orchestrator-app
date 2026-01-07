@@ -1,7 +1,7 @@
 """API functions exposed to the frontend (equivalent to Tauri commands)"""
 import time
 import threading
-from typing import Dict, List, Any, Tuple, Callable
+from typing import Dict, List, Any, Tuple, Callable, Optional
 from dataclasses import asdict
 from config import AppConfig, ServerConfig, LocalAppConfig, ServiceConfig
 from ssh_client import SSHClient, ContainerStatus
@@ -160,7 +160,12 @@ class API:
                     # Get status for each service
                     services_status = []
                     for service in server.services:
-                        containers = ssh.check_containers_at_path(service.path)
+                        try:
+                            containers = ssh.check_containers_at_path(service.path)
+                        except Exception as e:
+                            print(f"Error checking containers at {service.path}: {e}")
+                            # Continue with empty containers list
+                            containers = []
                         service_ready = ssh.check_service_health(service.port, service.healthcheck_path)
                         
                         # Debug logging
@@ -268,11 +273,94 @@ class API:
         except Exception as e:
             raise Exception(f"Failed to get all status: {e}")
     
+    def validate_server_config(self, servers: List[Dict[str, Any]]) -> Tuple[bool, str]:
+        """
+        Validate server configuration for duplicates and other issues.
+        
+        Returns:
+            Tuple of (is_valid, error_message)
+        """
+        if not servers:
+            return True, ""  # Empty is OK
+        
+        # Check for duplicate server names
+        server_names = {}
+        for idx, server in enumerate(servers):
+            name = server.get('name', '').strip()
+            if not name:
+                return False, f"Server {idx + 1} has an empty name. Server names are required."
+            
+            if name in server_names:
+                return False, f"Duplicate server name '{name}'. Server names must be unique."
+            server_names[name] = idx
+        
+        # Check for duplicate server IPs (host:port combination)
+        server_hosts = {}
+        for idx, server in enumerate(servers):
+            host = server.get('host', '').strip()
+            port = server.get('port', 22)
+            
+            if not host:
+                return False, f"Server '{server.get('name', f'Server {idx + 1}')}' has an empty host/IP address."
+            
+            # Validate IP/hostname format (basic check)
+            if not self._is_valid_host(host):
+                return False, f"Server '{server.get('name', f'Server {idx + 1}')}' has an invalid host/IP address: '{host}'"
+            
+            # Validate port range
+            if not (1 <= port <= 65535):
+                return False, f"Server '{server.get('name', f'Server {idx + 1}')}' has an invalid port: {port}. Port must be between 1 and 65535."
+            
+            host_key = f"{host}:{port}"
+            if host_key in server_hosts:
+                other_name = servers[server_hosts[host_key]].get('name', f'Server {server_hosts[host_key] + 1}')
+                return False, f"Duplicate server IP/Port '{host_key}'. Server '{server.get('name', f'Server {idx + 1}')}' conflicts with '{other_name}'."
+            server_hosts[host_key] = idx
+            
+            # Validate required fields
+            if not server.get('username', '').strip():
+                return False, f"Server '{server.get('name', f'Server {idx + 1}')}' is missing a username."
+            
+            if not server.get('ssh_key_path', '').strip():
+                return False, f"Server '{server.get('name', f'Server {idx + 1}')}' is missing an SSH key path."
+        
+        return True, ""
+    
+    def _is_valid_host(self, host: str) -> bool:
+        """Validate host/IP address format"""
+        import re
+        host = host.strip()
+        
+        # IPv4 pattern
+        ipv4_pattern = r'^(\d{1,3}\.){3}\d{1,3}$'
+        if re.match(ipv4_pattern, host):
+            parts = host.split('.')
+            return all(0 <= int(part) <= 255 for part in parts)
+        
+        # IPv6 pattern (basic check)
+        if ':' in host:
+            # Basic IPv6 validation
+            return len(host) <= 45  # Max IPv6 length
+        
+        # Hostname pattern (letters, numbers, dots, hyphens)
+        hostname_pattern = r'^[a-zA-Z0-9]([a-zA-Z0-9\-\.]*[a-zA-Z0-9])?$'
+        if re.match(hostname_pattern, host):
+            return len(host) <= 253  # Max hostname length
+        
+        return False
+    
     def save_config(self, config_dict: Dict[str, Any]) -> None:
-        """Save configuration"""
+        """Save configuration with validation"""
         try:
+            servers_data = config_dict.get('servers', [])
+            
+            # Validate servers before saving
+            is_valid, error_msg = self.validate_server_config(servers_data)
+            if not is_valid:
+                raise Exception(f"Configuration validation failed: {error_msg}")
+            
             # Convert dictionary to AppConfig
-            servers = [ServerConfig(**s) for s in config_dict.get('servers', [])]
+            servers = [ServerConfig(**s) for s in servers_data]
             local_apps = [LocalAppConfig(**app) for app in config_dict.get('local_apps', [])]
             
             config = AppConfig(
@@ -327,7 +415,9 @@ class API:
     
     def is_app_running(self, app_id: str) -> bool:
         """Check if an app is currently running"""
-        return self.process_manager.is_running(app_id)
+        is_running = self.process_manager.is_running(app_id)
+        print(f"[API] Checking if app {app_id} is running: {is_running}")
+        return is_running
     
     def terminate_app(self, app_id: str) -> None:
         """Terminate a running app"""
@@ -450,22 +540,61 @@ class API:
             raise Exception(f"Failed to mark setup as completed: {e}")
     
     def get_vctt_status(self) -> Dict[str, Any]:
-        """Get VCTT installation and configuration status"""
+        """
+        Get VCTT installation and configuration status.
+        Only checks local_apps config - no file system scanning.
+        """
         try:
-            print("Getting VCTT status...")
-            interface = VCTTInterface()
-            status = interface.get_status()
-            print(f"VCTT status: {status}")
-            return status
+            print("[VCTT] Checking status from config...")
+            config = AppConfig.load()
+            
+            # Look for VCTT in local_apps
+            vctt_app = None
+            for app in config.local_apps:
+                if 'VCTT' in app.name or 'vctt' in app.name.lower() or app.id.startswith('vctt'):
+                    vctt_app = app
+                    break
+            
+            if vctt_app:
+                # Validate the path exists
+                from pathlib import Path
+                work_dir = Path(vctt_app.working_directory)
+                main_py = work_dir / "main.py"
+                
+                if work_dir.exists() and main_py.exists():
+                    return {
+                        "installed": True,
+                        "configured": True,
+                        "app_id": vctt_app.id,
+                        "path": str(work_dir),
+                        "valid_path": True,
+                        "error": None
+                    }
+                else:
+                    return {
+                        "installed": False,
+                        "configured": True,  # Configured but path invalid
+                        "app_id": vctt_app.id,
+                        "path": str(work_dir),
+                        "valid_path": False,
+                        "error": f"VCTT path does not exist or is invalid: {work_dir}"
+                    }
+            else:
+                # Not configured
+                return {
+                    "installed": False,
+                    "configured": False,
+                    "valid_path": False,
+                    "error": None
+                }
         except Exception as e:
-            print(f"Error getting VCTT status: {e}")
+            print(f"[VCTT] Error getting status: {e}")
             import traceback
             traceback.print_exc()
             return {
                 "installed": False,
                 "configured": False,
                 "valid_path": False,
-                "found_installations": [],
                 "error": str(e)
             }
     
@@ -481,12 +610,14 @@ class API:
         """
         try:
             interface = VCTTInterface()
+            # Note: bootstrap is interactive, so wait=False starts it but doesn't wait for completion
+            # The installer window will guide the user through the process
             exit_code, message = interface.run_bootstrap(install_dir, wait=False)
             
             return {
-                "success": exit_code == 0,
+                "success": True,  # Success means installer started, not that installation completed
                 "exit_code": exit_code,
-                "message": message
+                "message": message or "Bootstrap installer started. Please follow the prompts in the installer window."
             }
         except Exception as e:
             return {
@@ -534,37 +665,71 @@ class API:
             if not main_py.exists():
                 raise Exception(f"main.py not found in {vctt_app_dir}. This doesn't appear to be a valid VCTT installation.")
             
-            # Check for launch script
+            # Check for launch script - prefer using launch script over python main.py
             launch_bat = vctt_app_dir / "launch_vctt.bat"
             launch_sh = vctt_app_dir / "launch_vctt.sh"
-            if not launch_bat.exists() and not launch_sh.exists():
-                raise Exception(f"Launch script not found in {vctt_app_dir}. This doesn't appear to be a valid VCTT installation.")
+            
+            # Determine which launch method to use
+            use_launch_script = False
+            if launch_bat.exists():
+                executable = str(launch_bat)
+                use_launch_script = True
+            elif launch_sh.exists():
+                executable = str(launch_sh)
+                use_launch_script = True
+            else:
+                # Fallback to python main.py if launch script doesn't exist
+                executable = str(main_py)
+                print(f"Warning: Launch script not found, using python main.py directly")
             
             # Check if VCTT is already configured
             for app in config.local_apps:
                 if 'VCTT' in app.name or 'vctt' in app.name.lower():
                     # Update existing config with validated path
-                    app.executable_path = str(main_py)
+                    app.executable_path = executable
                     app.working_directory = str(vctt_app_dir)
-                    app.use_shell = True
-                    app.conda_env = conda_env
+                    if use_launch_script:
+                        # Use launch script directly (it handles conda internally)
+                        app.use_shell = True
+                        app.conda_env = None  # Launch script handles conda
+                        app.shell_command = None
+                    else:
+                        # Fallback: use shell with conda
+                        app.use_shell = True
+                        app.conda_env = conda_env
+                        app.shell_command = None
                     config.save()
-                    print(f"Updated VCTT configuration: {app.id}")
+                    print(f"Updated VCTT configuration: {app.id} (using {'launch script' if use_launch_script else 'python main.py'})")
                     return app.id
             
             # Create new VCTT app config
             app_id = f"vctt-{int(time.time())}"
-            vctt_app = LocalAppConfig(
-                id=app_id,
-                name="VCTT App",
-                executable_path=str(main_py),
-                working_directory=str(vctt_app_dir),
-                use_shell=True,
-                conda_env=conda_env,
-                shell_command=None,
-                install_dependencies=False,
-                requirements_file=None
-            )
+            if use_launch_script:
+                # Use launch script directly (it handles conda internally)
+                vctt_app = LocalAppConfig(
+                    id=app_id,
+                    name="VCTT App",
+                    executable_path=executable,
+                    working_directory=str(vctt_app_dir),
+                    use_shell=True,
+                    conda_env=None,  # Launch script handles conda
+                    shell_command=None,
+                    install_dependencies=False,
+                    requirements_file=None
+                )
+            else:
+                # Fallback: use shell with conda
+                vctt_app = LocalAppConfig(
+                    id=app_id,
+                    name="VCTT App",
+                    executable_path=executable,
+                    working_directory=str(vctt_app_dir),
+                    use_shell=True,
+                    conda_env=conda_env,
+                    shell_command=None,
+                    install_dependencies=False,
+                    requirements_file=None
+                )
             
             config.local_apps.append(vctt_app)
             config.save()
@@ -574,6 +739,43 @@ class API:
             
         except Exception as e:
             raise Exception(f"Failed to configure VCTT app: {e}")
+
+
+    def browse_folder(self, title: str = "Select Folder") -> Optional[str]:
+        """
+        Open a folder picker dialog.
+        
+        Args:
+            title: Dialog title
+            
+        Returns:
+            Selected folder path or None if cancelled
+        """
+        try:
+            import tkinter as tk
+            from tkinter import filedialog
+            
+            # Create a hidden root window
+            root = tk.Tk()
+            root.withdraw()  # Hide the main window
+            root.attributes('-topmost', True)  # Bring to front
+            
+            # Open folder dialog
+            folder_path = filedialog.askdirectory(
+                title=title,
+                initialdir='~'
+            )
+            
+            root.destroy()
+            
+            if folder_path:
+                return folder_path
+            return None
+        except Exception as e:
+            print(f"Error opening folder dialog: {e}")
+            import traceback
+            traceback.print_exc()
+            return None
 
 
 # Global API instance

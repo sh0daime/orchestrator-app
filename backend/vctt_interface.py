@@ -187,32 +187,51 @@ class VCTTInterface:
             install_path.mkdir(parents=True, exist_ok=True)
             
             if self.is_windows:
-                # Windows: run batch file
-                cmd = [str(self.bootstrap_script)]
-                # Note: bootstrap_vctt.bat is interactive, so we can't easily pass install_dir
-                # For now, it will prompt the user
-                result = subprocess.run(
-                    cmd,
-                    shell=True,
-                    cwd=str(install_path.parent),
-                    capture_output=not wait,
-                    text=True
-                )
+                # Windows: run batch file in a new console window
+                # Use 'start' command to ensure a new visible terminal window
+                bootstrap_path = str(self.bootstrap_script)
+                if wait:
+                    # For wait=True, use CREATE_NEW_CONSOLE
+                    result = subprocess.run(
+                        bootstrap_path,
+                        shell=True,
+                        cwd=str(install_path.parent),
+                        creationflags=subprocess.CREATE_NEW_CONSOLE
+                    )
+                    output = result.stdout if hasattr(result, 'stdout') and result.stdout else ""
+                    return result.returncode, output
+                else:
+                    # For wait=False, use 'start' command to open in new window
+                    # This ensures the terminal window is visible and interactive
+                    # Use absolute paths and proper quoting
+                    bootstrap_abs = str(self.bootstrap_script.resolve())
+                    work_dir_abs = str(install_path.parent.resolve())
+                    # start "title" /D "working_dir" cmd /c "command"
+                    cmd = f'start "VCTT Bootstrap Installer" /D "{work_dir_abs}" cmd /c "{bootstrap_abs}"'
+                    print(f"[VCTT] Spawning terminal with command: {cmd}")
+                    subprocess.Popen(
+                        cmd,
+                        shell=True
+                    )
+                    return 0, "Bootstrap installer started in new terminal window"
             else:
                 # Mac/Linux: run shell script
                 cmd = ['bash', str(self.bootstrap_script), install_dir]
-                result = subprocess.run(
-                    cmd,
-                    cwd=str(install_path.parent),
-                    capture_output=not wait,
-                    text=True
-                )
-            
-            if wait:
-                output = result.stdout if result.stdout else ""
-                return result.returncode, output
-            else:
-                return 0, "Bootstrap installer started"
+                if wait:
+                    result = subprocess.run(
+                        cmd,
+                        cwd=str(install_path.parent),
+                        text=True
+                    )
+                    output = result.stdout if result.stdout else ""
+                    return result.returncode, output
+                else:
+                    # Don't wait - spawn in new terminal
+                    subprocess.Popen(
+                        cmd,
+                        cwd=str(install_path.parent)
+                    )
+                    return 0, "Bootstrap installer started in new terminal window"
                 
         except Exception as e:
             return 1, f"Failed to run bootstrap: {e}"

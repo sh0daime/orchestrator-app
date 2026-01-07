@@ -119,6 +119,9 @@ interface PyWebViewAPI {
     message: string;
   }>;
   configure_vctt_app: (vcttPath: string, condaEnv?: string) => Promise<string>;
+  
+  // File dialogs
+  browse_folder: (title?: string) => Promise<string | null>;
 }
 
 interface Window {
