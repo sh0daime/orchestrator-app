@@ -204,16 +204,16 @@ class VCTTInterface:
                     output = result.stdout if hasattr(result, 'stdout') and result.stdout else ""
                     return result.returncode, output
                 else:
-                    # For wait=False, use cmd.exe /k to keep terminal window open and visible
+                    # For wait=False, use cmd.exe /k call to keep terminal window open and visible
+                    # Using 'call' allows subprocess to properly quote paths with spaces
                     # This gives us a process handle we can track (cmd.exe stays alive while terminal is open)
                     bootstrap_abs = str(self.bootstrap_script.resolve())
                     install_dir_abs = str(install_path.resolve())
                     work_dir_abs = str(install_path.parent.resolve())
-                    # Use cmd.exe /k to run batch script and keep window open
-                    # /k keeps the command prompt open after the batch file completes
-                    # Pass arguments separately - subprocess handles quoting automatically
-                    cmd = ['cmd.exe', '/k', bootstrap_abs, install_dir_abs]
-                    print(f"[VCTT] Spawning terminal with command: cmd.exe /k {bootstrap_abs} {install_dir_abs}")
+                    # Use call to properly handle batch files with spaces in paths
+                    # subprocess.Popen with list format handles quoting automatically
+                    cmd = ['cmd.exe', '/k', 'call', bootstrap_abs, install_dir_abs]
+                    print(f"[VCTT] Spawning terminal with command: cmd.exe /k call \"{bootstrap_abs}\" \"{install_dir_abs}\"")
                     process = subprocess.Popen(
                         cmd,
                         cwd=work_dir_abs,
