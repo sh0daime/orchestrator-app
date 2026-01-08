@@ -1,6 +1,7 @@
 """API functions exposed to the frontend (equivalent to Tauri commands)"""
 import time
 import threading
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from typing import Dict, List, Any, Tuple, Callable, Optional
 from dataclasses import asdict
 from config import AppConfig, ServerConfig, LocalAppConfig, ServiceConfig
@@ -259,14 +260,38 @@ class API:
             raise Exception(f"Failed to get status: {e}")
     
     def get_all_status(self) -> List[Dict[str, Any]]:
-        """Get status for all servers and their services"""
+        """Get status for all servers and their services (parallelized for speed)"""
         try:
             config = AppConfig.load()
-            all_status = []
             
-            for server in config.servers:
-                status = self.get_status(server.id)
-                all_status.append(status)
+            if not config.servers:
+                return []
+            
+            # Fetch status from all servers in parallel using ThreadPoolExecutor
+            all_status = []
+            with ThreadPoolExecutor(max_workers=min(len(config.servers), 10)) as executor:
+                # Submit all server status fetches
+                future_to_server = {
+                    executor.submit(self.get_status, server.id): server 
+                    for server in config.servers
+                }
+                
+                # Collect results as they complete
+                for future in as_completed(future_to_server):
+                    server = future_to_server[future]
+                    try:
+                        status = future.result()
+                        all_status.append(status)
+                    except Exception as e:
+                        print(f"Error fetching status for server {server.name}: {e}")
+                        # Add error status for this server
+                        all_status.append({
+                            'server_id': server.id,
+                            'server_name': server.name,
+                            'connected': False,
+                            'services': [],
+                            'error': str(e)
+                        })
             
             return all_status
             

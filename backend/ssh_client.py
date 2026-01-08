@@ -91,28 +91,14 @@ class SSHClient:
     
     def check_containers_at_path(self, path: str) -> List[ContainerStatus]:
         """Check Docker containers status at a specific path"""
-        # First check if path exists
+        # Combine path and compose file checks into one command for speed
         try:
-            check_dir_cmd = f"test -d {path} && echo 'dir_exists' || echo 'dir_not_found'"
-            dir_check = self.execute_command(check_dir_cmd).strip()
-            if dir_check != 'dir_exists':
-                print(f"Error: Path does not exist: {path}")
-                print(f"Please verify the path is correct in Settings.")
-                return []
+            # Single combined check: path exists AND compose file exists
+            combined_check = f"test -d {path} && (test -f {path}/docker-compose.yml || test -f {path}/docker-compose.yaml) && echo 'ok' || echo 'fail'"
+            check_result = self.execute_command(combined_check).strip()
             
-            # Check if docker-compose.yml exists
-            check_compose_cmd = f"test -f {path}/docker-compose.yml && echo 'compose_yml' || (test -f {path}/docker-compose.yaml && echo 'compose_yaml' || echo 'no_compose')"
-            compose_check = self.execute_command(check_compose_cmd).strip()
-            if compose_check == 'no_compose':
-                print(f"Warning: No docker-compose.yml or docker-compose.yaml found at {path}")
-                print(f"Path exists but docker-compose file is missing. Listing directory contents:")
-                try:
-                    ls_cmd = f"ls -la {path} | head -20"
-                    ls_output = self.execute_command(ls_cmd)
-                    print(ls_output)
-                except:
-                    pass
-                # Return empty list - service will show as not configured
+            if check_result != 'ok':
+                print(f"Warning: Path does not exist or no docker-compose file found at {path}")
                 return []
         except Exception as e:
             print(f"Warning: Could not verify path {path}: {e}")
@@ -205,7 +191,8 @@ class SSHClient:
     
     def check_service_health(self, port: int, path: str = "/") -> bool:
         """Check if a service is responding at a specific port and path"""
-        cmd = f"curl -s -o /dev/null -w '%{{http_code}}' http://localhost:{port}{path} || echo '000'"
+        # Add --max-time 2 to limit health check to 2 seconds (prevents hanging)
+        cmd = f"curl -s -o /dev/null -w '%{{http_code}}' --max-time 2 http://localhost:{port}{path} || echo '000'"
         try:
             output = self.execute_command(cmd)
             status_code = output.strip()
