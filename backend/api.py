@@ -663,13 +663,15 @@ class API:
         """
         return VCTTInterface.is_bootstrap_running(install_dir)
     
-    def configure_vctt_app(self, vctt_path: str, conda_env: str = "vtcc_test") -> str:
+    def configure_vctt_app(self, vctt_path: str, conda_env: str = "vtcc_test", check_only_provided_path: bool = False) -> str:
         """
         Automatically configure VCTT in local_apps after installation.
         
         Args:
             vctt_path: Path to VCTT installation directory (can be parent or VCTT_app)
             conda_env: Conda environment name (default: vtcc_test)
+            check_only_provided_path: If True, only check the provided path (don't scan common locations).
+                                      If False, fall back to scanning if path not found. Default: False.
             
         Returns:
             App ID of the configured app
@@ -689,7 +691,11 @@ class API:
             elif (base_path / "VCTT_app" / "main.py").exists():
                 vctt_app_dir = base_path / "VCTT_app"
             else:
-                # Try to find VCTT installations
+                # If check_only_provided_path is True, fail immediately without scanning
+                if check_only_provided_path:
+                    raise Exception(f"VCTT installation not found at {vctt_path}. Please ensure the installation completed successfully in the terminal window.")
+                
+                # Otherwise, try to find VCTT installations (fallback for browsing existing installations)
                 found = VCTTInterface.find_vctt_installations()
                 if found:
                     vctt_app_dir = found[0]

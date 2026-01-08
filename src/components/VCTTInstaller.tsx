@@ -121,10 +121,10 @@ export default function VCTTInstaller({ onComplete, onCancel }: VCTTInstallerPro
       await waitForAPI();
       const api = window.pywebview!.api;
 
-      // First, verify that VCTT was actually installed at the specified path
-      // The configure_vctt_app will validate the path
+      // During installation session, only check the provided path (don't scan common locations)
+      // This prevents slow scanning when other VCTT installations exist elsewhere
       setStatusMessage('Configuring VCTT...');
-      await api.configure_vctt_app(installPath);
+      await api.configure_vctt_app(installPath, undefined, true); // checkOnlyProvidedPath = true
       
       setStatusMessage(`Installation complete! VCTT has been configured.`);
       setInstallStatus('success');

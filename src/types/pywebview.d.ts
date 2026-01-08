@@ -119,7 +119,7 @@ interface PyWebViewAPI {
     message: string;
   }>;
   is_vctt_bootstrap_running: (installDir: string) => Promise<boolean>;
-  configure_vctt_app: (vcttPath: string, condaEnv?: string) => Promise<string>;
+  configure_vctt_app: (vcttPath: string, condaEnv?: string, checkOnlyProvidedPath?: boolean) => Promise<string>;
   
   // File dialogs
   browse_folder: (title?: string) => Promise<string | null>;
