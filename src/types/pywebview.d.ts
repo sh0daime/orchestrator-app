@@ -98,6 +98,9 @@ interface PyWebViewAPI {
   open_settings_window: () => Promise<void>;
   open_status_window: () => Promise<void>;
   
+  // Browser/URL management
+  open_url: (url: string) => Promise<boolean>;
+  
   // Setup wizard
   mark_setup_completed: () => Promise<void>;
   

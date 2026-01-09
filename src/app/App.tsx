@@ -201,7 +201,8 @@ export default function App() {
             // Single instance, launch directly
             const instance = instances[0];
             const url = await api.launch_service(instance.serverId, instance.serviceId);
-            window.open(url, '_blank');
+            // Use Python API to open URL (works better on macOS)
+            await api.open_url(url);
           } else {
             // Multiple instances, show selector
             setServiceSelector({
@@ -225,7 +226,8 @@ export default function App() {
             // Single instance, launch directly
             const instance = instances[0];
             const url = await api.launch_service(instance.serverId, instance.serviceId);
-            window.open(url, '_blank');
+            // Use Python API to open URL (works better on macOS)
+            await api.open_url(url);
           } else {
             // Multiple instances, show selector
             setServiceSelector({

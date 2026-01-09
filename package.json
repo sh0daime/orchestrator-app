@@ -5,7 +5,7 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "build": "tsc && vite build && powershell -ExecutionPolicy Bypass -File fix-build.ps1",
+    "build": "tsc && vite build && node -e \"const os=require('os');const{execSync}=require('child_process');const isWin=os.platform()==='win32';execSync(isWin?'powershell -ExecutionPolicy Bypass -File fix-build.ps1':'bash fix-build.sh',{stdio:'inherit'})\"",
     "preview": "vite preview",
     "tauri": "tauri"
   },

@@ -6,10 +6,22 @@
     <title>Status - Orchestrator</title>
     <link rel="stylesheet" href="styles.css">
     <style>
+        /* Force light theme - prevent dark mode */
+        :root {
+            color-scheme: light only;
+        }
+        
+        html, body {
+            background-color: #ffffff !important;
+            color: #000000 !important;
+        }
+        
         .status-container {
             padding: 20px;
             max-width: 1000px;
             margin: 0 auto;
+            background-color: #ffffff;
+            color: #000000;
         }
         
         /* Server tabs */
