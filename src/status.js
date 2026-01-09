@@ -284,8 +284,19 @@ async function copyServiceUrl(url) {
 }
 
 // Open service URL
-function openServiceUrl(url) {
-    window.open(url, '_blank');
+async function openServiceUrl(url) {
+    try {
+        await waitForAPI();
+        // Use Python API to open URL (works better on macOS)
+        const success = await window.pywebview.api.open_url(url);
+        if (!success) {
+            alert(`Failed to open URL: ${url}\n\nPlease open it manually in your browser.`);
+        }
+    } catch (error) {
+        console.error("Error opening URL:", error);
+        // Fallback to window.open
+        window.open(url, '_blank');
+    }
 }
 
 // Initialize on page load

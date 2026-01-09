@@ -819,6 +819,37 @@ class API:
             import traceback
             traceback.print_exc()
             return None
+    
+    def open_url(self, url: str) -> bool:
+        """Open a URL in the default browser"""
+        try:
+            import webbrowser
+            import platform
+            
+            # On macOS, PyWebView can sometimes interfere with webbrowser
+            # Use subprocess as a fallback
+            if platform.system() == 'Darwin':
+                import subprocess
+                try:
+                    subprocess.run(['open', url], check=True)
+                    print(f"Opened URL in browser: {url}")
+                    return True
+                except subprocess.CalledProcessError:
+                    # Fallback to webbrowser
+                    pass
+            
+            # Standard approach for other platforms or as fallback
+            success = webbrowser.open(url)
+            if success:
+                print(f"Opened URL in browser: {url}")
+            else:
+                print(f"Failed to open URL: {url}")
+            return success
+        except Exception as e:
+            print(f"Error opening URL: {e}")
+            import traceback
+            traceback.print_exc()
+            return False
 
 
 # Global API instance
