@@ -57,6 +57,9 @@
             cursor: pointer;
             margin-left: auto;
         }
+        .add-tab-btn:hover {
+            background: #218838;
+        }
         
         /* Tab content */
         .tab-content {
@@ -99,16 +102,16 @@
             width: auto;
             margin-right: 8px;
         }
-        button {
+        button.primary {
             padding: 10px 20px;
             background: #007bff;
             color: white;
             border: none;
-            border-radius: 4px;
+            /* border-radius: 4px; */
             cursor: pointer;
             margin-right: 10px;
         }
-        button:hover {
+        button.primary:hover {
             background: #0056b3;
         }
         button.secondary {
@@ -232,7 +235,7 @@
         
         <!-- Action Buttons -->
         <div class="form-group">
-            <button id="save-config">Save Configuration</button>
+            <button id="save-config" class="primary">Save Configuration</button>
             <button id="load-config" class="secondary" style="color: white;">Reload Configuration</button>
         </div>
     </div>

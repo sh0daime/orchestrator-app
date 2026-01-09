@@ -255,7 +255,7 @@ class OrchestratorApp:
         self.windows['home'] = main_window
         
         # Start webview (this blocks)
-        webview.start(debug=True)
+        webview.start(debug=False)
 
 
 def main():
