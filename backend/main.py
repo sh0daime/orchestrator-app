@@ -7,6 +7,8 @@ from PIL import Image
 import pystray
 from pystray import MenuItem as Item, Menu
 import threading
+import http.server
+import socketserver
 from api import get_api
 from process_manager import get_process_manager
 
@@ -20,6 +22,8 @@ class OrchestratorApp:
         self.windows = {}
         self.tray_icon = None
         self.running = True
+        self.http_server = None
+        self.http_port = 8765
         
         # Get project root (parent of backend directory)
         self.project_root = Path(__file__).parent.parent
