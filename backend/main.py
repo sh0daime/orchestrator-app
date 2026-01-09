@@ -50,9 +50,6 @@ class OrchestratorApp:
             menu = Menu(
                 Item('Open Dashboard', self.on_open_dashboard),
                 Menu.SEPARATOR,
-                Item('Launch Portal', self.on_launch_portal),
-                Item('Launch VCTT', self.on_launch_vctt),
-                Menu.SEPARATOR,
                 Item('Settings', self.on_settings),
                 Item('Status', self.on_status),
                 Menu.SEPARATOR,
@@ -76,8 +73,9 @@ class OrchestratorApp:
         """Open/show the dashboard window"""
         def show_dashboard():
             if 'home' in self.windows and self.windows['home']:
-                # Window exists, just show it
+                # Window exists, restore and show it on top
                 try:
+                    self.windows['home'].restore()
                     self.windows['home'].show()
                 except:
                     # If showing fails, create a new window
@@ -89,44 +87,7 @@ class OrchestratorApp:
         # Run in separate thread to avoid blocking the tray
         threading.Thread(target=show_dashboard, daemon=True).start()
     
-    def on_launch_portal(self, icon=None, item=None):
-        """Launch Portal action"""
-        def launch():
-            try:
-                print("Launch Portal clicked - loading config...")
-                config_dict = self.api.load_config()
-                print(f"Config loaded: {len(config_dict.get('servers', []))} server(s)")
-                
-                if config_dict['servers']:
-                    server_id = config_dict['servers'][0]['id']
-                    print(f"Launching portal on server: {server_id}")
-                    url = self.api.launch_portal(server_id)
-                    print(f"Portal launched successfully at: {url}")
-                    # Open URL in browser
-                    import webbrowser
-                    webbrowser.open(url)
-                else:
-                    print("No servers configured!")
-            except Exception as e:
-                print(f"Failed to launch portal: {e}")
-                import traceback
-                traceback.print_exc()
-        
-        threading.Thread(target=launch, daemon=True).start()
-    
-    def on_launch_vctt(self, icon=None, item=None):
-        """Launch VCTT action"""
-        def launch():
-            try:
-                config_dict = self.api.load_config()
-                if config_dict['local_apps']:
-                    app_id = config_dict['local_apps'][0]['id']
-                    self.api.launch_local_app(app_id)
-            except Exception as e:
-                print(f"Failed to launch VCTT: {e}")
-        
-        threading.Thread(target=launch, daemon=True).start()
-    
+
     def on_settings(self, icon=None, item=None):
         """Open Settings window"""
         def create_settings():
